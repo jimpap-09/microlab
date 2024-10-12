@@ -13,17 +13,17 @@ wait_1000_ms:
 
     ldi r24, 0xE8	        ; Load low byte
     ldi r25, 0x03	        ; Load high byte
-x_loop:			            ; x = 1000
+x_loop:			        ; x = 1000
     ldi r23, 0x10	        ; Load outer_loop counter
 outer_loop:
 
     ldi r22, 0xFA	        ; Load inner_loop counter
 inner_loop:
     nop
-    dec r22		            ; Decrement inner loop counter
+    dec r22		        ; Decrement inner loop counter
     brne inner_loop	        ; delay = 4*250 = 1000 cycles
 
-    dec r23		            ; Decrement outer loop counter
+    dec r23		        ; Decrement outer loop counter
     brne outer_loop	        ; delay = 16 * 1000 cycles
 
     sbiw r24, 1		        ; Decrement wait_1000_ms loop counter
@@ -37,9 +37,9 @@ inner_loop:
 
 main:
 ; initialize stack pointer
-ldi r24, LOW(RAMEND)	    ; 1 cycle
+ldi r24, LOW(RAMEND)		; 1 cycle
 out SPL, r24		        ; 2 cycles
-ldi r24, HIGH(RAMEND)       ; 1 cycle
+ldi r24, HIGH(RAMEND)		; 1 cycle
 out SPH, r24		        ; 2 cycles
 
 ; set PORTD as output
@@ -53,17 +53,17 @@ bst DIR, 0
 
 ; move right 
 moveRight:
-    out PORTD, CTR	        ; output the current position
-    rcall wait_1000_ms	    ; wait for 1 sec
-    lsr CTR		            ; shift right for 1 bit
+    out PORTD, CTR		; output the current position
+    rcall wait_1000_ms		; wait for 1 sec
+    lsr CTR		        ; shift right for 1 bit
     cpi CTR, 0x01	        ; compare with LSB
     brne moveRight	        ; if not LSB then continue
 
 ; change direction
 changeDirection:
     out PORTD, CTR	        ; output the edge position
-    rcall wait_1000_ms	    ; wait for 1 sec
-    com DIR		            ; DIR <- ~DIR
+    rcall wait_1000_ms		; wait for 1 sec
+    com DIR		        ; DIR <- ~DIR
     bst DIR, 0		        ; T <- DIR0
     cpi DIR, 0x01	        ; compare with 1
     brne moveRight	        ; if T != 1 then moveRight
@@ -71,8 +71,8 @@ changeDirection:
 ; move left
 moveLeft:
     out PORTD, CTR	        ; output the current position
-    rcall wait_1000_ms      ; wait for 1 sec
-    lsl CTR		            ; shift left for 1 bit
+    rcall wait_1000_ms		; wait for 1 sec
+    lsl CTR		        ; shift left for 1 bit
     cpi CTR, 0x80	        ; compare with MSB
     brne moveLeft	        ; if not MSB then continue
-    jmp changeDirection	    ; else changeDirection
+    jmp changeDirection		; else changeDirection
