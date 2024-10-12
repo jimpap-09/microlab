@@ -10,17 +10,17 @@ wait_x_msec:
 
     ldi r24, 0x01	        ; Load low byte
     ldi r25, 0x00	        ; Load high byte
-x_loop:			            ; x = 0001
+x_loop:			        ; x = 0001
     ldi r23, 0x10	        ; Load outer_loop counter
 outer_loop:
 
     ldi r22, 0xFA	        ; Load inner_loop counter
 inner_loop:
     nop
-    dec r22		            ; Decrement inner loop counter
+    dec r22		        ; Decrement inner loop counter
     brne inner_loop	        ; delay = 4*250 = 1000 cycles
 
-    dec r23		            ; Decrement outer loop counter
+    dec r23		        ; Decrement outer loop counter
     brne outer_loop	        ; delay = 16 * 1000 cycles
 
     sbiw r24, 1		        ; Decrement wait_x_ms loop counter
@@ -34,9 +34,9 @@ inner_loop:
 
 main:
 ; initialize stack pointer
-ldi r24, LOW(RAMEND)        ; 1 cycle
+ldi r24, LOW(RAMEND)        	; 1 cycle
 out SPL, r24		        ; 2 cycles
-ldi r24, HIGH(RAMEND)       ; 1 cycle
+ldi r24, HIGH(RAMEND)       	; 1 cycle
 out SPH, r24		        ; 2 cycles
 
 rcall wait_x_msec
