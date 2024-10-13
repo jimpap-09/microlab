@@ -76,3 +76,4 @@ moveLeft:
     cpi CTR, 0x80	    ; compare with MSB
     brne moveLeft	    ; if not MSB then continue
     jmp changeDirection	    ; else changeDirection
+    
