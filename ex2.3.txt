@@ -1,0 +1,112 @@
+
+; exercise2.3.asm
+
+.include "m328PBdef.inc"
+
+.def di=r20
+.def do=r21
+.def led=r22
+.def temp=r23
+.def x_low=r24
+.def x_high=r25
+.def ctr=r26
+
+.org 0x0
+rjmp reset
+.org 0x4	; INT1 : ADDRESS (ISR1)
+rjmp ISR1
+
+reset:
+    ;Init Stack Pointer
+    ldi r24, low(RAMEND)
+    out SPL, r24
+    ldi r24, high(RAMEND)
+    out SPH, r24
+
+    ; Interrupt on rising edge of INT0 pin
+	; r24 = 0b00000001
+    ldi r24, (1 << ISC11) | (1 << ISC10)	
+    sts EICRA, r24
+
+    ldi r24, (1 << INT1)		; r24 = 0b00000010
+    out EIMSK, r24				; INT1 : ENABLED (PD3)
+    
+    sei							; Set Global Interrupt Flag
+
+    ser r24						; r24 = 1
+    out DDRB, r24				; PORTB : OUTPUT
+
+	clr led						; led = 0
+	clr temp					; temp = 0
+
+	out DDRD, led				; PORTD : INPUT
+
+; default_state => led = 0
+main:
+    clr led
+    out PORTB, led				; PORTB <- led
+    rjmp main
+
+; delay for x ms = x * 16.000 cycles
+; 1 <= x <= 65.536 = 0xFFFF
+delay:							; del_tot = x*(del_out + 4) - 1 + 4 = x*16.004 + 3
+	ldi do, 16					; f = 16 MHz
+loop_out:						; del_out = 1 + 16*(del_in + 4) - 1 = 16.000
+	ldi di, 249				
+loop_inn:						; del_in = 1 + 4*249 - 1 = 996
+	nop
+	dec di
+	brne loop_inn
+
+	nop
+	dec do
+	brne loop_out
+
+	sbiw x_low, 1				; x -= 1
+	brne delay
+	
+	ret
+
+ISR1:
+    in temp, SREG
+    push temp
+	push r24
+	push r25
+
+refresh:
+	ldi x_low, low(5)
+	ldi x_high, high(5)
+	rcall delay
+
+	sbic EIFR, INTF1
+	sbi EIFR, INTF1
+
+	sei
+
+	ldi led, 0x3F
+	out PORTB, led
+
+	ldi r24, low(500)
+	ldi r25, high(500)
+	rcall delay
+
+	ldi ctr, 9
+loop_5_sec:
+	ldi led, 0x01
+	out PORTB, led
+
+	ldi r24, low(500)
+	ldi r25, high(500)
+	rcall delay
+
+	in temp, EIFR
+	andi temp, (1<<INTF1)
+	cpi temp, (1<<INTF1)
+	breq refresh
+
+	dec ctr
+	brne loop_5_sec
+
+	reti
+
+
