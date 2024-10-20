@@ -22,8 +22,8 @@ reset:
     out SPH, r24
 
     ;Interrupt on rising edge of INT0 pin
-	; r24 = 0b00000000
-    ldi r24, (0 << ISC01) | (0 << ISC00)	
+	; r24 = 0b00000001
+    ldi r24, (1 << ISC01) | (1 << ISC00)	
     sts EICRA, r24
 
     ldi r24, (1 << INT0)		; r24 = 0b00000001
