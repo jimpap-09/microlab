@@ -1,0 +1,114 @@
+.include "m328PBdef.inc"	;ATmega328P microcontroller definitions
+
+.equ F=16			;Microcontroller operating frequency in MHz
+.equ DEL_mS=500			;Delay in ms (valid number from 1 to 4095)
+.def counter=r16	        ;Counts INT1 interrupts occured
+
+.org 0x0
+rjmp reset
+.org 0x4 
+rjmp ISR1
+
+reset:
+    ;Init Stack Pointer
+    ldi r24, LOW(RAMEND)
+    out SPL, r24
+    ldi r24, HIGH(RAMEND)
+    out SPH, r24
+    
+    ;Interrupt on rising edge of INT1 pin
+    ldi r24, (1 << ISC11) | (1 << ISC10)
+    sts EICRA, r24
+    
+    ;Enable the INT1 interrupt (PD3)
+    ldi r24, (1 << INT1)
+    out EIMSK, r24
+    
+    ;Sets the Global Interrupt Flag
+    sei
+    
+    ;Init PORTB, PORTC as output
+    ser r26
+    out DDRB, r26
+    out DDRC, r26
+    
+    ;Set PIND5 to input
+    cbi DDRD, PIND5
+
+    ;Activate pull-up resistor 
+    sbi PORTD, PIND5
+
+    clr counter
+
+    ;No interrupt INT1 has occured yet
+    out PORTC, counter
+
+loop1:
+    clr r26
+loop2:
+    out PORTB, r26
+    ;Set delay (number of cycles)
+    ldi r24, low(DEL_mS)
+    ldi r25, high(DEL_mS)
+    rcall delay_ms
+    
+    inc r26
+    ;Compare r26 with 16
+    cpi r26, 16
+    breq loop1
+    rjmp loop2
+    
+;Delay of 1000*F1+6 cycles (almost equal to 1000*F1 cycles)
+delay_ms:
+    ldi r23, F
+loop_out:
+;Total delay of next 4 instruction group = 1+(249*4-1) = 996 cycles
+    ldi r22, 249              ; 1 cycle
+loop_inn:
+    dec r22                   ; 1 cycle
+    nop                       ; 1 cycle
+    brne loop_inn             ; 1 or 2 cycles
+
+    dec r23
+    brne loop_out
+    
+    sbiw r24,1                ; 2 cycles
+    brne delay_ms             ; 1 or 2 cycles
+    
+    ret                       ; 4 cycles
+
+ISR1:
+    in r17, SREG              ; Save SREG
+    push r17
+    
+    rcall wait5m
+    
+    sbic EIFR, INTF1          ; If switch bouncing has occured
+    sbi EIFR, INTF1           ; Set INTF1 and clear pending interrupt
+    
+    sbis PIND, PIND5          ; Skip if PIND5 is high (1)
+    rjmp return_from_interrupt
+   
+    
+    inc counter
+    cpi counter, 64           ; Compare counter with 63
+    in r14, SREG
+    sbrc r14, 1               ; Skip if bit Z in SREG is low (0)
+    clr counter               
+    out PORTC, counter
+   
+return_from_interrupt:
+    pop r17
+    out SREG, r17             ; Restore SREG
+
+    reti
+
+wait5m:
+    push r24
+    push r25
+    ldi r24, 5
+    ldi r25, 0
+    rcall delay_ms
+    pop r25
+    pop r24
+    ret
