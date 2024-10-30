@@ -32,6 +32,12 @@ void PWM_init() {
 }
 
 void update_PWM_Duty_Cycle(int increment) {
+  /*
+   * if 5 < DC_VALUE < 250 then increment
+   * else no increment
+   * if increment = 0 then decrease
+   * else increase
+  */
     if(increment)
         if(DC_VALUE == 250)
             break;
