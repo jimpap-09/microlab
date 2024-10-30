@@ -45,7 +45,7 @@ reset:
     sbi PORTD, PIND3
     sbi PORTD, PIND4
 
-	; init Z to reset middle of OCR1A_table
+    ; init Z to reset middle of OCR1A_table
     ldi ZL, low(OCR1A_table+6)
     ldi ZH, high(OCR1A_table+6)
 
@@ -110,22 +110,3 @@ ON_PD4:
     
     ; return to the main program
     rjmp main
-
-	/*
-delay:						; delay subroutine
-	ldi r23, 16
-loop_out:
-	ldi r22, 249
-loop_inn:
-	nop
-	dec r22
-	brne loop_inn
-	
-	dec r23
-	brne loop_out
-
-	sbiw r24, 1
-	brne delay
-
-	ret
-	*/
