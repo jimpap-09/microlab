@@ -76,7 +76,7 @@ PD3:
     ldi r24, low(10)
     ldi r25, high(10)
     rcall delay_mS	    ; debouncing -> delay 10 ms
-    cpi DC_VALUE, 250	    ; if DC_VALUE = 98%
+    cpi DC_VALUE, 250	; if DC_VALUE = 98%
     breq main		    ; then no increment
     adiw ZL, 2		    ; else increment by 2 (bytes)
     rjmp newDC		    ; to load newDC
@@ -90,7 +90,7 @@ PD4:
     sbiw ZL, 2		    ; else decrement by 2 (bytes)
     rjmp newDC		    ; to load newDC
 
-delay_mS:		    ; delay_ms subroutine
+delay_mS:		        ; delay_ms subroutine
     ldi r22, 16
 loop_out:
     ldi r21, 249
