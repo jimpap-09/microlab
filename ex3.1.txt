@@ -10,21 +10,21 @@
 
 // table with DC values
 OCR1A_table:
-    .dw 0	; 0	0%
-    .dw 5	; 1	2%
-    .dw 30	; 2	10%
-    .dw 46	; 3	18%
-    .dw 66	; 4	26%
-    .dw 87	; 5	34%
-    .dw 107	; 6	42%
-    .dw 128	; 7	50%
-    .dw 148	; 8	58%
-    .dw 168	; 9	66%
-    .dw 189	; 10	74%
-    .dw 209	; 11	82%
-    .dw 230	; 12	90%
-    .dw 250	; 13	98%
-    .dw 255	; 14	100%
+    .dw 0	    ; 0     0%
+    .dw 5	    ; 1	    2%
+    .dw 30	    ; 2	    10%
+    .dw 46	    ; 3	    18%
+    .dw 66	    ; 4	    26%
+    .dw 87	    ; 5	    34%
+    .dw 107	    ; 6	    42%
+    .dw 128	    ; 7	    50%
+    .dw 148	    ; 8	    58%
+    .dw 168	    ; 9     66%
+    .dw 189	    ; 10    74%
+    .dw 209	    ; 11    82%
+    .dw 230	    ; 12    90%
+    .dw 250	    ; 13    98%
+    .dw 255	    ; 14    100%
 
 reset:
     // init stack pointer
@@ -51,7 +51,7 @@ reset:
     // DC_VALUE = 128
     ldi ZH,HIGH(OCR1A_table*2)
     ldi ZL,LOW(OCR1A_table*2)
-    adiw ZL,7
+    adiw ZL, 7
 
 // start program => load DC_VALUE from OCR1A_table (program memory)
 newDC:
