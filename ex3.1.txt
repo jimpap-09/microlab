@@ -3,110 +3,103 @@
 ; TOP = 255 (8 bit)
 ; N = f_CLK / (f_PWM * (TOP + 1)) = 1
 
-.def temp = r20
-.def DC_VALUE = r23
+.include"m328PBdef.inc"
 
-.org 0x0000
+.def temp=r16
+.def DC_VALUE=r20
 
+// table with DC values
 OCR1A_table:
-.db 5, 25, 45, 65, 86, 107, 128, 149, 170, 191, 212, 223, 234, 250
-;   0	1   2	3   4	5    6	  7    8    9	 10   11   12	13
-
-rjmp reset
-
-; (COM1A0, COM1A1) = (0, 1)
-; (WGM13, WGM12, WGM11, WGM10) = (0, 1, 0, 1)
+    .dw 0	; 0	0%
+    .dw 5	; 1	2%
+    .dw 30	; 2	10%
+    .dw 46	; 3	18%
+    .dw 66	; 4	26%
+    .dw 87	; 5	34%
+    .dw 107	; 6	42%
+    .dw 128	; 7	50%
+    .dw 148	; 8	58%
+    .dw 168	; 9	66%
+    .dw 189	; 10	74%
+    .dw 209	; 11	82%
+    .dw 230	; 12	90%
+    .dw 250	; 13	98%
+    .dw 255	; 14	100%
 
 reset:
+    // init stack pointer
+    ldi temp,low(RAMEND)
+    out SPL,temp
+    ldi temp,high(RAMEND)
+    out SPH,temp
     
-    ; stack init
-    ldi temp, low(RAMEND)
-    out SPL, temp
-    ldi temp, high(RAMEND)
-    out SPH, temp
+    // set PORTB as output
+    ser temp
+    out DDRB, temp
     
-    ; TCCR1A init
-    ldi temp, (1<<COM1A1) | (1<<WGM10)
+    // set PORTD as input
+    clr temp
+    out DDRD,temp
+    
+    // Vref = 5V, No conversion, prescaler = 1, fast pwm 8-bit
+    ldi temp,(1 << WGM10) | (1 << COM1A1)
     sts TCCR1A, temp
     
-    ; TCCR1B init
-    ldi temp, (1<<WGM12) | (1<<CS10)
+    ldi temp,(1 << WGM12) | (1 << CS10)
     sts TCCR1B, temp
     
-    ; OCR1A init => Duty Cycle = 128
-    ldi DC_VALUE, 128
-    sts OCR1AL, DC_VALUE
-    
-    ; PD3, PD4 input pins
-    cbi DDRD, PIND3
-    cbi DDRD, PIND4
+    // DC_VALUE = 128
+    ldi ZH,HIGH(OCR1A_table*2)
+    ldi ZL,LOW(OCR1A_table*2)
+    adiw ZL,7
 
-    ; activate pullup resistors
-    sbi PORTD, PIND3
-    sbi PORTD, PIND4
+// start program => load DC_VALUE from OCR1A_table (program memory)
+newDC:
+    lpm
+    mov DC_VALUE,r0
 
-    ; init Z to reset middle of OCR1A_table
-    ldi ZL, low(OCR1A_table+6)
-    ldi ZH, high(OCR1A_table+6)
-
-; main program
+// main program
 main:
-    ; read portD
-    in temp, PORTD
-    
-    ; filter temp register
-    andi temp, (1<<PIND3) | (1<<PIND4)
-
-    ; if PD3 = ON then go to ON_PD3
-    sbrc temp, 4
-    rjmp ON_PD3
-    
-    ; if PD4 = ON then go to ON_PD4
-    sbrc temp, 5
-    rjmp ON_PD4
-    
-    ; else return to the main program
-ret_main:
-    rjmp main
-
-ON_PD3:
-    
-    ; compare DC_VALUE with 250 = 98%
-    cpi DC_VALUE, 250
-    
-    ; if DC_VALUE = 250 then return to the main program
-    breq ret_main
-    
-    ; else increment by 1 the z register
-    inc ZL
-	adc ZH, r0
-    
-    ; update the DC_VALUE register
-    ld DC_VALUE, Z
-    
-    ; store the new  DC_VALUE value to the OCR1AL register
     sts OCR1AL, DC_VALUE
     
-    ; return to the main program
+    in temp, PIND
+    
+    sbrs temp,3		    ; if PD3 is pressed
+    rjmp PD3		    ; then go to PD3
+    
+    sbrs temp,4		    ; if PD4 is pressed
+    rjmp PD4		    ; then go to PD4
+    
     rjmp main
     
-ON_PD4:
-    
-    ; compare DC_VALUE with 5 = 2%
-    cpi DC_VALUE, 5
-    
-    ; if DC_VALUE = 2 then return to the main program
-    breq ret_main
-    
-    ; else increment by 1 the z register
-    inc ZL
-	adc ZH, r0
-    
-    ; update the DC_VALUE register
-    ld DC_VALUE, Z
-    
-    ; store the new  DC_VALUE value to the OCR1AL register
-    sts OCR1AL, DC_VALUE
-    
-    ; return to the main program
-    rjmp main
+PD3:
+    ldi r24, low(10)
+    ldi r25, high(10)
+    rcall delay_mS	    ; debouncing -> delay 10 ms
+    cpi DC_VALUE, 250	    ; if DC_VALUE = 98%
+    breq main		    ; then no increment
+    adiw ZL, 2		    ; else increment by 2 (bytes)
+    rjmp newDC		    ; to load newDC
+
+PD4:
+    ldi r24, low(10)
+    ldi r25, high(10)
+    rcall delay_mS	    ; debouncing -> delay 10 ms
+    cpi DC_VALUE, 5	    ; if DC_VALUE = 2%
+    breq main		    ; then no decrement
+    sbiw ZL, 2		    ; else decrement by 2 (bytes)
+    rjmp newDC		    ; to load newDC
+
+delay_mS:		    ; delay_ms subroutine
+    ldi r22, 16
+loop_out:
+    ldi r21, 249
+loop_inn:
+    nop
+    dec r21
+    brne loop_inn
+    dec r22
+    brne loop_out
+    sbiw r24 ,1
+    brne delay_mS
+    ret
