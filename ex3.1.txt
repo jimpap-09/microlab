@@ -56,7 +56,7 @@ reset:
 // start program => load DC_VALUE from OCR1A_table (program memory)
 newDC:
     lpm
-    mov DC_VALUE,r0
+    mov DC_VALUE, r0
 
 // main program
 main:
@@ -64,10 +64,10 @@ main:
     
     in temp, PIND
     
-    sbrs temp,3		    ; if PD3 is pressed
+    sbrs temp, 3		; if PD3 is pressed
     rjmp PD3		    ; then go to PD3
     
-    sbrs temp,4		    ; if PD4 is pressed
+    sbrs temp, 4		; if PD4 is pressed
     rjmp PD4		    ; then go to PD4
     
     rjmp main
