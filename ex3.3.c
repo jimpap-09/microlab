@@ -60,6 +60,7 @@ int main(void) {
 		}
 		// if mode = 1
 		else {
+			OCR1AL = OCR1A_table[ptr];
 			// PD1 => DC +
 			if (!(PIND & (1<<PIND1))) {
 				while(!(PIND & (1<<PIND1))) _delay_ms(10);
