@@ -1,20 +1,25 @@
 .include"m328PBdef.inc"
 
-.def temp=r16
+.def del_high=r25
+.def del_low=r24
 .def freq=r23
-.def ADC_H=r21
-.def ADC_L=r20
+.def cnt=r22
+.def prevADCH=r21
+.def prevADCL=r20
+.def dec2=r19
+.def dec1=r18
+.def temp2=r17
+.def temp=r16
+.def resL=r15
+.def resH=r14
 
-.equ f_CPU = 16		    ; f = 16 MHz
-
-.equ PD0=0 
-.equ PD1=1 
-.equ PD2=2 
-.equ PD3=3 
-.equ PD4=4 
-.equ PD5=5 
-.equ PD6=6 
-.equ PD7=7 
+.equ f_CPU = 16					; f = 16 MHz
+.equ LCD_RS = 2
+.equ LCD_E = 3
+.equ LCD_DB4 = 4
+.equ LCD_DB5 = 5
+.equ LCD_DB6 = 6
+.equ LCD_DB7 = 7
 
 .org 0x0
 rjmp reset
@@ -28,7 +33,7 @@ reset:
     ldi temp, high(RAMEND)
     out SPH, temp
     
-    ; ADC enable, no conversion, ADCIE = 1, prescaler = 128
+    ; ADC enable, no conversion, ADCIE = 1, prescaler = 128 => fADC = 125kHz
     ldi temp, 0b10001111
     sts ADCSRA, temp
     
@@ -39,52 +44,284 @@ reset:
     ; Enable Global Interrupts
     sei
     
-    ; set PORTC as input
-    clr temp
-    out DDRC, temp
+    ; set PINC1 as ADC input
+    cbi DDRC, 1
 
-start_conv:
+	; set PORTD as output
+	ser temp
+	out DDRD, temp
+
+start_conv:						; start adc conversion
     lds temp, ADCSRA
     ori temp, (1<<ADSC)
     sts temp, ADCSRA
 
-wait_adc:
+wait_adc:						; wait until the adc conversion ends
     lds temp, ADCSRA
     sbrc temp, ADSC
     rjmp wait_adc
     
-    ldi r24, low(1000)
-    ldi r25, high(1000)
-    rcall wait_ms
+    ldi del_low, low(1000)
+    ldi del_high, high(1000)
+    rcall wait_msec				; delay 1 sec
     rjmp start_conv
 
-
+; ISR_ADC
 ISR_ADC:
-    lds ADC_L, ADCL
-    lds ADC_H, ADCH
-    reti
+	
+	in temp, SREG
+	push temp
+
+    lds temp, ADCL
+	cp prevADCL, temp
+	brne new_conv
+	lds temp, ADCH
+    cp prevADCH, temp
+	brne new_conv
+
+	rjmp return_home
+
+new_conv:						; change the DDRAM's content
+	lds prevADCL, ADCL
+	lds prevADCH, ADCH			; change the prevADC value
+
+	mov XL, prevADCL
+	mov XH, prevADCH
+	ldi cnt, 2
+	rcall shift_left_double		; X = ADC * 4
+
+	add XL, prevADCL
+	adc XH, prevADCH			; X = ADC * 5
+
+	ldi cnt, 10
+	rcall shift_right_double	; X = ADC * 5 / 1024 = Vin
+
+	mov VL, XL
+	mov VH, XH					; Vin = V = (VH:VL)
+
+	ldi cnt, 6
+	rcall shift_left_double		; X = Vin * 2^6
+
+	mov Y, X					; Y = Vin * 2^6
+
+	mov XL, VL
+	mov XH, VH					; X = Vin
+
+	ldi cnt, 5
+	rcall shift_left_double		; X = Vin * 2^5
+	add Y, X					; Y = Vin (2^5 + 2^6)
+
+	mov XL, VL
+	mov XH, VH					; X = Vin
+	
+	ldi cnt, 2
+	rcall shift_left_double		; X = Vin * 2^2
+	add Y, X					; Y = Vin (2^2 + 2^5 + 2^6) = Vin * 100
+
+	mov X, Y					; X = Y = Vin * 100
+	clr Z
+
+first_digit_loop:
+	cpi XL, 10
+	brsh first_digit_not_found
+	cpi XH, 0
+	brne first_digit_not_found
+	rjmp first_digit_found
+
+first_digit_not_found:
+	sbiw X, 10
+	adiw Z, 1
+	rjmp first_digit_loop
+
+first_digit_found:
+	mov dec1, XL
+
+	mov X, Z					; X = Vin * 10
+	clr Z
+
+second_digit_loop:
+	cpi XL, 10
+	brsh second_digit_not_found
+	cpi XH, 0
+	brne second_digit_not_found
+	rjmp second_digit_found
+
+second_digit_not_found:
+	sbiw X, 10
+	adiw Z, 1
+	rjmp second_digit_loop
+
+second_digit_found:
+	mov dec2, XL
+
+	ldi r24, '0'
+	add r24, ZL
+	rcall lcd_data
+
+	ldi r24, '.'
+	rcall lcd_data
+
+	ldi r24, '0'
+	add r24, dec2
+	rcall lcd_data
+
+	ldi r24, '0'
+	add r24, dec1
+	rcall lcd_data
+
+return_home:
+	ldi r24, 2
+	rcall lcd_command			; don't change the DDRAM's contents
+
+	ldi del_low, low(1530)
+    ldi del_high, high(1530)
+    rcall wait_usec				; delay 1.53 msec
+
+	pop temp
+	out SREG, temp
+
+	reti
+
+; =============================================  SUBROUTINES ===================================================
+
+; write_2_nibbles
+write_2_nibbles:
+	push r24
+	in r25, PIND
+	andi r25, 0x0f
+	andi r24, 0xf0
+	add r24, r25
+	out PORTD, r24
+	sbi PORTD, 3
+	cbi PORTD, 3
+	pop r24
+	swap r24
+	andi r24, 0xf0
+
+; lcd_init
+lcd_init:
+	ldi del_low ,low(200)
+    ldi del_high ,high(200)
+    rcall wait_msec				; delay 200 msec
     
-; delay subroutines
-wait_msec:		    ; 1 ms = f_CPU * 1000 cycles
+    ldi r24, 0x30				; command to switch to 8 bit mode 
+    out PORTD, r24
+    sbi PORTD, LCD_E			; Enable  Pulse 
+    nop
+    nop
+    cbi PORTD ,LCD_E
+    ldi del_low, 250
+    ldi del_high, 0	 
+    rcall wait_usec				; delay 250 usec
+     
+    ldi r24, 0x30				; command to switch to 8 bit mode 
+    out PORTD, r24
+    sbi PORTD, LCD_E			; Enable  Pulse 
+    nop
+    nop
+    cbi PORTD ,LCD_E
+    ldi del_low, 250
+    ldi del_high, 0	 
+    rcall wait_usec				; delay 250 usec
+
+	ldi r24, 0x30				; command to switch to 8 bit mode 
+    out PORTD, r24
+    sbi PORTD, LCD_E			; Enable  Pulse 
+    nop
+    nop
+    cbi PORTD ,LCD_E
+    ldi del_low, 250
+    ldi del_high, 0	 
+    rcall wait_usec				; delay 250 usec
+
+	ldi r24, 0x30				; command to switch to 4 bit mode 
+    out PORTD, r24
+    sbi PORTD, LCD_E			; Enable  Pulse 
+    nop
+    nop
+    cbi PORTD ,LCD_E
+    ldi del_low, 250
+    ldi del_high, 0	 
+    rcall wait_usec				; deay 250 usec
+
+	ldi r24, 0x28
+	rcall lcd_command			; 5x8 dots, 2 lines
+
+	ldi r24, 0x0c
+	rcall lcd_command			; display on, cursor off
+
+	rcall lcd_clear_display		; clear display
+
+	ldi r24, 0x06
+	rcall lcd_command			; increase address, no display shift
+
+	ret
+
+; lcd_data
+lcd_data:
+	sbi PORTD, LCD_RS			; LCD_RS = 1
+	rcall write_2_nibbles		; send data
+	ldi del_low, 250
+	ldi del_high, 0
+	rcall wait_usec				; delay 250 usec
+	ret
+
+; lcd_command
+lcd_command:
+	cbi PORTD, LCD_RS			; LCD_RS = 0
+	rcall write_2_nibbles		; send command
+	ldi del_low, 250
+	ldi del_high, 0
+	rcall wait_usec				; delay 250 usec
+	ret
+
+; lcd_clear_display
+lcd_clear_display:
+	ldi r24, 0x01
+	rcall lcd_command			; clear dispaly command
+	ldi del_low, low(5)
+	ldi del_high, high(5)
+	rcall wait_msec				; delay 5 msec
+	ret
+
+; wait_msec
+wait_msec:						; 1 ms = f_CPU * 1000 cycles
     ldi freq, f_CPU
 loop_out:
-    ldi r22, 249
+    ldi cnt, 249
 loop_inn:
-    dec r22
+    dec cnt
     nop
     brne loop_inn
     dec freq
     brne loop_out
-    sbiw r24, 1
+    sbiw del_low, 1
     brne wait_msec
     ret
 
-wait_usec:		    ; 1 us = f_CPU cycles
-    ldi freq, (f_CPU>>2)
-loop:			    ; del_loop = 4 * f_CPU/4 cycles
+; wait_usec
+wait_usec:						; 1 us = f_CPU cycles
+    ldi cnt, (f_CPU>>2)
+loop:							; del_loop = 4 * f_CPU/4 cycles
     nop
-    dec freq
+    dec cnt
     brne loop
-    sbiw r24, 1
+    sbiw del_low, 1
     brne wait_usec
     ret
+
+; shift_left_double
+shift_left_double:				; multiply double register
+	lsl XL
+	rol XH
+	dec cnt
+	brne shift_left_double
+	ret
+
+; shift_right_double
+shift_right_double:				; devide double register
+	lsr XH
+	ror XL
+	dec cnt
+	brne shift_right_double
+	ret
