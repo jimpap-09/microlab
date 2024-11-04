@@ -23,14 +23,10 @@ reset:
     ser temp
     out DDRB, temp
     
-    // set PORTC as input
+    // set PORTD as input
     clr temp
-    out DDRC,temp
+    out DDRD,temp
 
-	// set PORTD as output
-	ser temp
-	out DDRD, temp
-    
     // Vref = 5V, No conversion, prescaler = 1, fast pwm 8-bit
     ldi temp,(1 << WGM10) | (1 << COM1A1)
     sts TCCR1A, temp
@@ -52,9 +48,8 @@ newDC:
 
 // main program
 main:
-	;sts OCR1AL, DC_VALUE
 
-    in temp, PINC
+    in temp, PIND
     
     sbrs temp, 3		; if PD3 is pressed
     rjmp PD3		    ; then go to PD3
