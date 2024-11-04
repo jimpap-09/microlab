@@ -10,8 +10,8 @@
 .def dec1=r18
 .def temp2=r17
 .def temp=r16
-.def resL=r15
-.def resH=r14
+.def VL=r15
+.def VH=r14
 
 .equ f_CPU = 16					; f = 16 MHz
 .equ LCD_RS = 2
@@ -54,7 +54,7 @@ reset:
 start_conv:						; start adc conversion
     lds temp, ADCSRA
     ori temp, (1<<ADSC)
-    sts temp, ADCSRA
+    sts ADCSRA, temp
 
 wait_adc:						; wait until the adc conversion ends
     lds temp, ADCSRA
@@ -102,24 +102,30 @@ new_conv:						; change the DDRAM's content
 	ldi cnt, 6
 	rcall shift_left_double		; X = Vin * 2^6
 
-	mov Y, X					; Y = Vin * 2^6
+	mov YL, XL
+	mov YH, XH					; Y = Vin * 2^6
 
 	mov XL, VL
 	mov XH, VH					; X = Vin
 
 	ldi cnt, 5
 	rcall shift_left_double		; X = Vin * 2^5
-	add Y, X					; Y = Vin (2^5 + 2^6)
+	add YL, XL
+	adc YH, XH					; Y = Vin (2^5 + 2^6)
 
 	mov XL, VL
 	mov XH, VH					; X = Vin
 	
 	ldi cnt, 2
 	rcall shift_left_double		; X = Vin * 2^2
-	add Y, X					; Y = Vin (2^2 + 2^5 + 2^6) = Vin * 100
+	add YL, XL
+	adc YH, XH					; Y = Vin (2^2 + 2^5 + 2^6) = Vin * 100
 
-	mov X, Y					; X = Y = Vin * 100
-	clr Z
+	mov XL, YL
+	mov XH, YH					; X = Y = Vin * 100
+	
+	clr ZL
+	clr ZH
 
 first_digit_loop:
 	cpi XL, 10
@@ -136,8 +142,11 @@ first_digit_not_found:
 first_digit_found:
 	mov dec1, XL
 
-	mov X, Z					; X = Vin * 10
-	clr Z
+	mov XL, ZL
+	mov XH, ZH					; X = Vin * 10
+
+	clr ZL
+	clr ZH
 
 second_digit_loop:
 	cpi XL, 10
@@ -192,11 +201,24 @@ write_2_nibbles:
 	andi r24, 0xf0
 	add r24, r25
 	out PORTD, r24
-	sbi PORTD, 3
-	cbi PORTD, 3
+
+	sbi PORTD, LCD_E
+	nop
+	nop
+	cbi PORTD, LCD_E
+
 	pop r24
 	swap r24
 	andi r24, 0xf0
+	add r24, r25
+	out PORTD, r24
+
+	sbi PORTD, LCD_E
+	nop
+	nop
+	cbi PORTD, LCD_E
+
+	ret
 
 ; lcd_init
 lcd_init:
