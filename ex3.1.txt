@@ -10,21 +10,7 @@
 
 // table with DC values
 OCR1A_table:
-    .dw 0	    ; 0     0%
-    .dw 5	    ; 1	    2%
-    .dw 30	    ; 2	    10%
-    .dw 46	    ; 3	    18%
-    .dw 66	    ; 4	    26%
-    .dw 87	    ; 5	    34%
-    .dw 107	    ; 6	    42%
-    .dw 128	    ; 7	    50%
-    .dw 148	    ; 8	    58%
-    .dw 168	    ; 9     66%
-    .dw 189	    ; 10    74%
-    .dw 209	    ; 11    82%
-    .dw 230	    ; 12    90%
-    .dw 250	    ; 13    98%
-    .dw 255	    ; 14    100%
+.db 0, 5, 30, 46, 66, 87, 107, 128, 148, 168, 189, 209, 230, 250, 255
 
 reset:
     // init stack pointer
@@ -37,9 +23,13 @@ reset:
     ser temp
     out DDRB, temp
     
-    // set PORTD as input
+    // set PORTC as input
     clr temp
-    out DDRD,temp
+    out DDRC,temp
+
+	// set PORTD as output
+	ser temp
+	out DDRD, temp
     
     // Vref = 5V, No conversion, prescaler = 1, fast pwm 8-bit
     ldi temp,(1 << WGM10) | (1 << COM1A1)
@@ -49,20 +39,22 @@ reset:
     sts TCCR1B, temp
     
     // DC_VALUE = 128
-    ldi ZH,HIGH(OCR1A_table*2)
-    ldi ZL,LOW(OCR1A_table*2)
-    adiw ZL, 7
+    ldi ZH, high(OCR1A_table<<1)
+    ldi ZL, low(OCR1A_table<<1)
+
+    adiw Z, 7
 
 // start program => load DC_VALUE from OCR1A_table (program memory)
 newDC:
     lpm
     mov DC_VALUE, r0
+	sts OCR1AL, DC_VALUE
 
 // main program
 main:
-    sts OCR1AL, DC_VALUE
-    
-    in temp, PIND
+	;sts OCR1AL, DC_VALUE
+
+    in temp, PINC
     
     sbrs temp, 3		; if PD3 is pressed
     rjmp PD3		    ; then go to PD3
@@ -73,21 +65,21 @@ main:
     rjmp main
     
 PD3:
-    ldi r24, low(10)
-    ldi r25, high(10)
+    ldi r24, low(100)
+    ldi r25, high(100)
     rcall delay_mS	    ; debouncing -> delay 10 ms
     cpi DC_VALUE, 250	; if DC_VALUE = 98%
     breq main		    ; then no increment
-    adiw ZL, 2		    ; else increment by 2 (bytes)
+    adiw Z, 1		    ; else increment by 2 (bytes)
     rjmp newDC		    ; to load newDC
 
 PD4:
-    ldi r24, low(10)
-    ldi r25, high(10)
+    ldi r24, low(100)
+    ldi r25, high(100)
     rcall delay_mS	    ; debouncing -> delay 10 ms
     cpi DC_VALUE, 5	    ; if DC_VALUE = 2%
     breq main		    ; then no decrement
-    sbiw ZL, 2		    ; else decrement by 2 (bytes)
+    sbiw Z, 1		    ; else decrement by 2 (bytes)
     rjmp newDC		    ; to load newDC
 
 delay_mS:		        ; delay_ms subroutine
