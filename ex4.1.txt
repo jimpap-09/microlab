@@ -8,10 +8,8 @@
 .def prevADCL=r20
 .def dec2=r19
 .def dec1=r18
-.def temp2=r17
+.def dec0=r17
 .def temp=r16
-.def VL=r15
-.def VH=r14
 
 .equ f_CPU = 16					; f = 16 MHz
 .equ LCD_RS = 2
@@ -51,6 +49,8 @@ reset:
 	ser temp
 	out DDRD, temp
 
+	out DDRB, temp
+
 start_conv:						; start adc conversion
     lds temp, ADCSRA
     ori temp, (1<<ADSC)
@@ -87,95 +87,94 @@ new_conv:						; change the DDRAM's content
 
 	mov XL, prevADCL
 	mov XH, prevADCH
-	ldi cnt, 2
-	rcall shift_left_double		; X = ADC * 4
 
-	add XL, prevADCL
-	adc XH, prevADCH			; X = ADC * 5
+	lsr XH
+	ror XL						; X = ADC / 2
 
-	ldi cnt, 10
-	rcall shift_right_double	; X = ADC * 5 / 1024 = Vin
-
-	mov VL, XL
-	mov VH, XH					; Vin = V = (VH:VL)
-
-	ldi cnt, 6
-	rcall shift_left_double		; X = Vin * 2^6
+	; GOAL = ADC * 500/1024 = ADC * 125/256 = ADC * 5 * 25 / 256 = ADC * [ (1 + 2^2) * (1 + 2^3 + 2^4) / (2^4 * 2^4) ]
+/*
+	ldi cnt, 4
+	rcall shift_right_double	; X = ADC / 16
 
 	mov YL, XL
-	mov YH, XH					; Y = Vin * 2^6
+	mov YH, XH					; Y = X
 
-	mov XL, VL
-	mov XH, VH					; X = Vin
-
-	ldi cnt, 5
-	rcall shift_left_double		; X = Vin * 2^5
-	add YL, XL
-	adc YH, XH					; Y = Vin (2^5 + 2^6)
-
-	mov XL, VL
-	mov XH, VH					; X = Vin
-	
 	ldi cnt, 2
-	rcall shift_left_double		; X = Vin * 2^2
-	add YL, XL
-	adc YH, XH					; Y = Vin (2^2 + 2^5 + 2^6) = Vin * 100
+	rcall shift_left_double		; X = ADC * 2^2 / 16
+
+	add XL, YL
+	adc XH, YH					; X = ADC * 5 / 16
+
+	mov YL, XL
+	mov YH, XH					; Y = X
+
+	ldi cnt, 4
+	rcall shift_right_double	; X = ADC * 5 / (16 * 16)
+
+	mov YL, XL
+	mov YH, XH					; Y = X
+
+	ldi cnt, 4
+	rcall shift_left_double		; X = ADC * 5 * (2^4) / (16 * 16)
+
+	mov ZL, XL
+	mov ZH, XH					; Z = X
 
 	mov XL, YL
-	mov XH, YH					; X = Y = Vin * 100
-	
-	clr ZL
-	clr ZH
+	mov XH, XL					; X = Y
 
-first_digit_loop:
-	cpi XL, 10
-	brsh first_digit_not_found
+	ldi cnt, 3
+	rcall shift_left_double		; X = ADC * 5 * (2^3) / (16 * 16)
+
+	add XL, ZL
+	adc XH, ZH					; X = ADC * 5 * (2^4 + 2^3) / (16 * 16)
+
+	add XL, YL
+	adc XH, YH					; X = ADC * 5 * (2^4 + 2^3 + 1) / (16 * 16)
+*/
+
+	ldi dec0, 0
+	ldi dec1, 0
+	ldi dec2, 0
+
+	ldi YL, 100
+	ldi YH, 0
+
+loop2:
 	cpi XH, 0
-	brne first_digit_not_found
-	rjmp first_digit_found
+	brne xh_non_zero
+	cpi XL, 100
+	brlo loop1
 
-first_digit_not_found:
-	sbiw X, 10
-	adiw Z, 1
-	rjmp first_digit_loop
+xh_non_zero:
+	sub XL, YL
+	sbc XH, YH
+	inc dec2
+	rjmp loop2
 
-first_digit_found:
-	mov dec1, XL
-
-	mov XL, ZL
-	mov XH, ZH					; X = Vin * 10
-
-	clr ZL
-	clr ZH
-
-second_digit_loop:
+loop1:
 	cpi XL, 10
-	brsh second_digit_not_found
-	cpi XH, 0
-	brne second_digit_not_found
-	rjmp second_digit_found
+	brlo dec0_found
+	sbiw XL, 10
+	inc dec1
+	rjmp loop1
 
-second_digit_not_found:
-	sbiw X, 10
-	adiw Z, 1
-	rjmp second_digit_loop
-
-second_digit_found:
-	mov dec2, XL
+dec0_found:
+	mov dec0, XL
 
 	ldi r24, '0'
-	add r24, ZL
+	add r24, dec2
 	rcall lcd_data
 
 	ldi r24, '.'
 	rcall lcd_data
 
 	ldi r24, '0'
-	add r24, dec2
+	add r24, dec1
 	rcall lcd_data
 
 	ldi r24, '0'
-	add r24, dec1
+	add r24, dec0
 	rcall lcd_data
 
 return_home:
