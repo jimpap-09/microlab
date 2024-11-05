@@ -49,7 +49,10 @@ reset:
 	ser temp
 	out DDRD, temp
 
-	out DDRB, temp
+	rcall lcd_init
+	ldi r24, 250
+	ldi r25, 0
+	rcall wait_usec
 
 start_conv:						; start adc conversion
     lds temp, ADCSRA
@@ -86,52 +89,40 @@ new_conv:						; change the DDRAM's content
 	lds prevADCH, ADCH			; change the prevADC value
 
 	mov XL, prevADCL
-	mov XH, prevADCH
-
-	lsr XH
-	ror XL						; X = ADC / 2
-
-	; GOAL = ADC * 500/1024 = ADC * 125/256 = ADC * 5 * 25 / 256 = ADC * [ (1 + 2^2) * (1 + 2^3 + 2^4) / (2^4 * 2^4) ]
-/*
-	ldi cnt, 4
-	rcall shift_right_double	; X = ADC / 16
-
-	mov YL, XL
-	mov YH, XH					; Y = X
-
-	ldi cnt, 2
-	rcall shift_left_double		; X = ADC * 2^2 / 16
-
-	add XL, YL
-	adc XH, YH					; X = ADC * 5 / 16
-
-	mov YL, XL
-	mov YH, XH					; Y = X
-
-	ldi cnt, 4
-	rcall shift_right_double	; X = ADC * 5 / (16 * 16)
-
-	mov YL, XL
-	mov YH, XH					; Y = X
-
-	ldi cnt, 4
-	rcall shift_left_double		; X = ADC * 5 * (2^4) / (16 * 16)
-
-	mov ZL, XL
-	mov ZH, XH					; Z = X
-
-	mov XL, YL
-	mov XH, XL					; X = Y
+	mov XH, prevADCH			; X = ADC
 
 	ldi cnt, 3
-	rcall shift_left_double		; X = ADC * 5 * (2^3) / (16 * 16)
+	rcall shift_left_double
 
-	add XL, ZL
-	adc XH, ZH					; X = ADC * 5 * (2^4 + 2^3) / (16 * 16)
+	mov YL, XL
+	mov YH, XH					; Y = X = ADC * 2^3
+
+	lsl XL
+	rol XH
+
+	add YL, XL
+	adc YH, XH					; Y = ADC * (2^3 + 2^4)
+
+	add YL, prevADCL
+	adc YH, prevADCH			; Y = ADC * 25
+
+	mov XL, YL
+	mov XH, YH					; X = Y
+
+	ldi cnt, 4
+	rcall shift_right_double	; X = ADC * 25 / 16
+
+	mov YL, XL
+	mov YH, XH
+
+	ldi cnt, 2
+	rcall shift_left_double
 
 	add XL, YL
-	adc XH, YH					; X = ADC * 5 * (2^4 + 2^3 + 1) / (16 * 16)
-*/
+	adc XH, YH					; X = ADC * 25 * 5 / 16
+
+	ldi cnt, 4
+	rcall shift_right_double	; X = ADC * 25 * 5 / 256
 
 	ldi dec0, 0
 	ldi dec1, 0
@@ -255,7 +246,7 @@ lcd_init:
     ldi del_high, 0	 
     rcall wait_usec				; delay 250 usec
 
-	ldi r24, 0x30				; command to switch to 4 bit mode 
+	ldi r24, 0x20				; command to switch to 4 bit mode 
     out PORTD, r24
     sbi PORTD, LCD_E			; Enable  Pulse 
     nop
