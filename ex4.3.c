@@ -1,155 +1,167 @@
 #define F_CPU 16000000UL
+
 #include <avr/io.h>
 #include <util/delay.h>
-#include <stdio.h>
+#include <xc.h>
 
-#define CO_THRESHOLD 70    // CO threshold in ppm
-#define ADC_CHANNEL 2      // ADC channel for A2
+#define LCD_PORT PORTD							// lcd port
+#define LCD_RS 2
+#define LCD_E  3
+#define LCD_DB4 4
+#define LCD_DB5 5
+#define LCD_DB6 6
+#define LCD_DB7 7
 
-// LCD Connections
-#define LCD_PORT PORTD
-#define LCD_DDR DDRD
-#define RS PD2
-#define EN PD3
+#define CO_THRESHOLD 70							// CO upper limit
+#define ADC_CHANNEL 2							// input ADC channel
+#define SENS 0.129							// sensitivity
 
-// LCD Messages
-const char gas_detected_msg[] = "GAS DETECTED";
+const char gas_detected_msg[] = "GAS DETECTED";				// messages
 const char clear_msg[] = "CLEAR";
 
-// Function to initialize the ADC
-void ADC_init() {
-	ADMUX = (1 << REFS0) | (ADC_CHANNEL);  // Set reference voltage to AVcc, input channel to ADC2 (A2)
-	ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);  // Enable ADC, set prescaler to 128
-}
+uint16_t check;								// check if ppm is CO > 70
 
-// Function to start an ADC conversion and wait until it completes
-uint16_t ADC_read() {
-	ADCSRA |= (1 << ADSC);  // Start ADC conversion
-	while (ADCSRA & (1 << ADSC));  // Wait until ADSC becomes 0, indicating conversion complete
-	return ADC;  // Return the 10-bit ADC result
-}
-
-// Function to calculate CO concentration in ppm from ADC result
-float calculate_ppm(uint16_t adc_value) {
-	float voltage = (adc_value / 1024.0) * 5.0;  // Convert ADC value to voltage
-	float delta_v = voltage - 0.1;  // Subtract baseline voltage (Vgas0 = 0.1V)
-	if (delta_v < 0) delta_v = 0;   // Ensure no negative values
-	float ppm = (delta_v / 0.129);  // Convert voltage to ppm based on sensitivity (129 nA/ppm)
-	return ppm;
-}
-
-void LED_init() {
-	DDRB |= 0x3F;  // Set PB0 to PB5 as output
-}
-
-// Function to update LEDs based on concentration level
-void update_LEDs(float ppm) {
-	LCD_clear();
-	if (ppm < 10) {
-		PORTB = 0x01;  // Light up PB0 for low ppm
-		} else if (ppm < 20) {
-		PORTB = 0x03;  // Light up PB0, PB1
-		} else if (ppm < 40) {
-		PORTB = 0x07;  // Light up PB0, PB1, PB2
-		} else if (ppm < 60) {
-		PORTB = 0x0F;  // Light up PB0 to PB3
-		} else if (ppm < 70) {
-		PORTB = 0x1F;  // Light up PB0 to PB4
-		} else {
-		PORTB = 0x3F;  // Light up PB0 to PB5 for 70 ppm or above
-	}
-
-	// Blink LEDs if CO concentration is 70 ppm or higher
-	if (ppm >= 70) {
-		_delay_ms(500);  // Half a second delay for blinking effect
-		PORTB ^= 0x3F;
-		LCD_clear();// Toggle all LEDs on PB0 to PB5
-	}
-}
-
-// LCD command function
-void LCD_command(unsigned char cmnd) {
-	LCD_PORT = (LCD_PORT & 0x0F) | (cmnd & 0xF0);  // Send upper nibble
-	LCD_PORT &= ~(1 << RS);  // RS = 0 for command
-	LCD_PORT |= (1 << EN);   // Enable pulse
+void enable_pulse() {							// enable pulse
+	LCD_PORT |= (1<<LCD_E);
 	_delay_us(1);
-	LCD_PORT &= ~(1 << EN);
-
-	_delay_us(200);
-
-	LCD_PORT = (LCD_PORT & 0x0F) | (cmnd << 4);  // Send lower nibble
-	LCD_PORT |= (1 << EN);
-	_delay_us(1);
-	LCD_PORT &= ~(1 << EN);
-	_delay_ms(2);
+	LCD_PORT &= ~(1<<LCD_E);
 }
 
-// LCD data function
-void LCD_data(unsigned char data) {
-	LCD_PORT = (LCD_PORT & 0x0F) | (data & 0xF0);  // Send upper nibble
-	LCD_PORT |= (1 << RS);  // RS = 1 for data
-	LCD_PORT |= (1 << EN);
-	_delay_us(1);
-	LCD_PORT &= ~(1 << EN);
-
-	_delay_us(200);
-
-	LCD_PORT = (LCD_PORT & 0x0F) | (data << 4);  // Send lower nibble
-	LCD_PORT |= (1 << EN);
-	_delay_us(1);
-	LCD_PORT &= ~(1 << EN);
-	_delay_ms(2);
+void write_2_nibbles (unsigned char content) {
+	LCD_PORT = (LCD_PORT & 0x0f) | (content & 0xf0);		// send upper half
+	enable_pulse();
+	LCD_PORT = (LCD_PORT & 0x0f) | ((content<<4) & 0xf0);	// send lower half
+	enable_pulse();
 }
 
-// LCD initialization function
-void LCD_init() {
-	LCD_DDR = 0xFF;  // Set LCD port as output
-	_delay_ms(20);
-
-	LCD_command(0x02);  // Initialize LCD in 4-bit mode
-	LCD_command(0x28);  // 2 line, matrix
-	LCD_command(0x0C);  // Display on, cursor off
-	LCD_command(0x06);  // Increment cursor
-	LCD_command(0x01);  // Clear display
-	_delay_ms(2);
+void lcd_data(unsigned char data) {			// send lcd_data
+	LCD_PORT |= (1<<LCD_RS);
+	write_2_nibbles(data);
+	_delay_us(250);
 }
 
-// Function to clear the LCD display
-void LCD_clear() {
-	LCD_command(0x01);  // Clear display
-	_delay_ms(2);
+void lcd_command(unsigned char command) {	// send lcd_command
+	LCD_PORT &= ~(1<<LCD_RS);
+	write_2_nibbles(command);
+	_delay_us(250);
 }
 
-// Function to display a string on the LCD
-void LCD_write_string(const char* str) {
-	while (*str) {
-		LCD_data(*str++);
+void lcd_clear_display() {					// clear display
+	lcd_command(0x01);
+	_delay_ms(5);
+}
+
+void lcd_init() {							// lcd_init
+	_delay_ms(200);
+	
+	for(int i=0; i<3; i++) {
+		LCD_PORT = 0x30;
+		enable_pulse();
+		_delay_us(250);
+	}
+	
+	LCD_PORT = 0x20;
+	enable_pulse();
+	_delay_us(250);
+	
+	lcd_command(0x28);
+	lcd_command(0x0C);
+	lcd_clear_display();
+	lcd_command(0x06);
+}
+
+void new_conv() {							// new conversion
+	
+	uint32_t Vin = ADC * 500.0 / 1024.0;	// Vin
+
+	uint32_t dV = Vin - 0.1;				// gas_v0 = 0.1
+	if(dV < 0) dV = 0;
+	
+	uint32_t ppm = dV / SENS;				// sens = 0.129
+	
+	int i = 0;
+	if(ppm < CO_THRESHOLD) {
+		lcd_clear_display();
+		while(clear_msg[i]) lcd_data(clear_msg[i++]);
+	}
+	else {
+		lcd_clear_display();
+		while(gas_detected_msg[i]) lcd_data(gas_detected_msg[i++]);
+	}
+	
+	if(ppm < CO_THRESHOLD/5) {
+		PORTB = 0x01;
+		_delay_ms(100);
+		check = 0;
+	}
+	else if(ppm < 2*CO_THRESHOLD/5) {
+		PORTB = 0x03;
+		_delay_ms(100);
+		check = 0;
+	}
+	else if(ppm < 3*CO_THRESHOLD/5) {
+		PORTB = 0x07;
+		_delay_ms(100);
+		check = 0;
+	}
+	else if(ppm < 4*CO_THRESHOLD/5) {
+		PORTB = 0x0f;
+		_delay_ms(100);
+		check = 0;
+	}
+	else if(ppm < CO_THRESHOLD) {
+		PORTB = 0x1f;
+		_delay_ms(100);
+		check = 0;
+	}
+	else {
+		if(!check) {
+			PORTB = 0x3f;
+			check = 1;
+		}
+		if(ppm < 3*CO_THRESHOLD) {
+			for(int i = 0; i < 1; i++) {
+				_delay_ms(100);
+				PORTB ^= 0x3f;
+			}	
+		}
+		else if(ppm < 6*CO_THRESHOLD){
+			for(int i = 0; i < 2; i++) {
+				_delay_ms(50);
+				PORTB ^= 0x3f;
+			}
+		}
+		else {
+			for(int i = 0; i < 10; i++) {
+				_delay_ms(20);
+				PORTB ^= 0x3f;
+			}
+		}
 	}
 }
 
-// Function to display the alert on the LCD
-void display_alert(float ppm) {
-	LCD_clear();  // Clear LCD
-	if (ppm > CO_THRESHOLD) {
-		LCD_write_string(gas_detected_msg);  // Display alert if ppm > threshold
-		} else {
-		LCD_write_string(clear_msg);  // Display clear if ppm <= threshold
-	}
+void reset() {													// reset
+	DDRD = 0xff;												// PORTD -> output
+	DDRC &= ~(1<<PINC2);										// PC2 -> A2 -> POT3
+	DDRB = 0xff;												// PORTB -> output
+
+	ADMUX = (1<<REFS0) | (ADC_CHANNEL);							// Vref = 5V, ADC2 -> input
+	ADCSRA = (1<<ADEN) | (1<<ADPS2) | (1<<ADPS1) | (1<<ADPS0);	// ADC enable, prescaler = 128 => fADC = 125KHz
+	
+	lcd_init();													// lcd_init
+	_delay_ms(100);
+	
+	lcd_clear_display();										// lcd_clear_display
+	_delay_us(250);
 }
 
-
-int main() {
-	ADC_init();  // Initialize ADC
-	LED_init();  // Initialize LEDs
-	LCD_init();  // Initialize LCD
-
-	while (1) {
-		uint16_t adc_value = ADC_read();  // Read ADC value
-		float ppm = calculate_ppm(adc_value);  // Calculate CO concentration
-
-		display_alert(ppm);  // Display alert or clear on LCD
-		update_LEDs(ppm);    // Update and blink LEDs based on ppm level
-
-		_delay_ms(100);  // Check every 100 mS
+int main(void) {												// main
+	
+	reset();
+	while(1) {
+		ADCSRA |= (1<<ADSC);									// start ADC conversion
+		while(ADCSRA & (1 << ADSC));							// while in ADC conversion do nothing
+		new_conv();												// else start new conversion
 	}
+	return 0;
 }
