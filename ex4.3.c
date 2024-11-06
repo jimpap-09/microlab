@@ -30,23 +30,23 @@ void enable_pulse() {							// enable pulse
 void write_2_nibbles (unsigned char content) {
 	LCD_PORT = (LCD_PORT & 0x0f) | (content & 0xf0);		// send upper half
 	enable_pulse();
-	LCD_PORT = (LCD_PORT & 0x0f) | ((content<<4) & 0xf0);	// send lower half
+	LCD_PORT = (LCD_PORT & 0x0f) | ((content<<4) & 0xf0);		// send lower half
 	enable_pulse();
 }
 
-void lcd_data(unsigned char data) {			// send lcd_data
+void lcd_data(unsigned char data) {					// send lcd_data
 	LCD_PORT |= (1<<LCD_RS);
 	write_2_nibbles(data);
 	_delay_us(250);
 }
 
-void lcd_command(unsigned char command) {	// send lcd_command
+void lcd_command(unsigned char command) {				// send lcd_command
 	LCD_PORT &= ~(1<<LCD_RS);
 	write_2_nibbles(command);
 	_delay_us(250);
 }
 
-void lcd_clear_display() {					// clear display
+void lcd_clear_display() {						// clear display
 	lcd_command(0x01);
 	_delay_ms(5);
 }
@@ -72,12 +72,12 @@ void lcd_init() {							// lcd_init
 
 void new_conv() {							// new conversion
 	
-	uint32_t Vin = ADC * 500.0 / 1024.0;	// Vin
+	uint32_t Vin = ADC * 500.0 / 1024.0;				// Vin
 
-	uint32_t dV = Vin - 0.1;				// gas_v0 = 0.1
+	uint32_t dV = Vin - 0.1;					// gas_v0 = 0.1
 	if(dV < 0) dV = 0;
 	
-	uint32_t ppm = dV / SENS;				// sens = 0.129
+	uint32_t ppm = dV / SENS;					// calculate ppm
 	
 	int i = 0;
 	if(ppm < CO_THRESHOLD) {
@@ -140,28 +140,28 @@ void new_conv() {							// new conversion
 	}
 }
 
-void reset() {													// reset
-	DDRD = 0xff;												// PORTD -> output
-	DDRC &= ~(1<<PINC2);										// PC2 -> A2 -> POT3
-	DDRB = 0xff;												// PORTB -> output
+void reset() {								// reset
+	DDRD = 0xff;							// PORTD -> output
+	DDRC &= ~(1<<PINC2);						// PC2 -> A2 -> POT3
+	DDRB = 0xff;							// PORTB -> output
 
-	ADMUX = (1<<REFS0) | (ADC_CHANNEL);							// Vref = 5V, ADC2 -> input
+	ADMUX = (1<<REFS0) | (ADC_CHANNEL);				// Vref = 5V, ADC2 -> input
 	ADCSRA = (1<<ADEN) | (1<<ADPS2) | (1<<ADPS1) | (1<<ADPS0);	// ADC enable, prescaler = 128 => fADC = 125KHz
 	
-	lcd_init();													// lcd_init
+	lcd_init();							// lcd_init
 	_delay_ms(100);
 	
-	lcd_clear_display();										// lcd_clear_display
+	lcd_clear_display();						// lcd_clear_display
 	_delay_us(250);
 }
 
-int main(void) {												// main
+int main(void) {							// main
 	
 	reset();
 	while(1) {
-		ADCSRA |= (1<<ADSC);									// start ADC conversion
-		while(ADCSRA & (1 << ADSC));							// while in ADC conversion do nothing
-		new_conv();												// else start new conversion
+		ADCSRA |= (1<<ADSC);					// start ADC conversion
+		while(ADCSRA & (1 << ADSC));				// while in ADC conversion do nothing
+		new_conv();						// else start new conversion
 	}
 	return 0;
 }
