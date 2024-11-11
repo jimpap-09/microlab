@@ -39,23 +39,26 @@ typedef enum {
 #define TW_STATUS (TWSR0 & TW_STATUS_MASK)
 
 void twi_init(void) {
-	TWSR0 = 0;					// prescaler_value = 1
+	TWSR0 = 0;			// prescaler_value = 1
 	TWBR0 = TWBR0_VALUE;		// scl_clock 100KHz
 }
 
-unsigned char twi_readAck(void) {	// read one byte from the twi device and request more
+// read one byte from the twi device and request more
+unsigned char twi_readAck(void) {
 	TWCR0 = (1 << TWINT) | (1 << TWEN) | (1 << TWEA);
 	while(!(TWCR0 & (1 << TWINT)));
 	return TWDR0;
 }
 
-unsigned char twi_readNak(void) {	// read one byte from the twi device and then stop
+// read one byte from the twi device and then stop
+unsigned char twi_readNak(void) {
 	TWCR0 = (1 << TWINT) | (1 << TWEN);
 	while(!(TWCR0 & (1 << TWINT)));
 	return TWDR0;
 }
 
-unsigned char twi_start(unsigned char address) {	// send address and transfer direction
+// send address and transfer direction
+unsigned char twi_start(unsigned char address) {
 	uint8_t twi_status;
 	TWCR0 = (1 << TWINT) | (1 << TWSTA) | (1 << TWEN);
 	while(!(TWCR0 & (1 << TWINT)));
@@ -160,8 +163,8 @@ uint8_t f0(uint8_t input) {
 	uint8_t D = (input >> 3) & 1;
 
 	// F0 = (A'BC + B'D)'
-	uint8_t A_ = A^0x01;
-	uint8_t B_ = B^0x01;
+	uint8_t A_ = A^0x01;			// invert A_LSB
+	uint8_t B_ = B^0x01;			// invert B_LSB
 	uint8_t term1 = A_ & B & C;
 	uint8_t term2 = B_ & D;
 	uint8_t F0 = (term1 | term2)^0x01;
