@@ -13,8 +13,8 @@
 #define TWBR0_VALUE ((F_CPU/SCL_CLOCK)-16)/2
 
 typedef enum {
-	REG_INPUT_0	= 0,
-	REG_INPUT_1	= 1,
+	REG_INPUT_0 = 0,
+	REG_INPUT_1 = 1,
 	REG_OUTPUT_0 = 2,
 	REG_OUTPUT_1 = 3,
 	REG_POLARITY_INV_0 = 4,
