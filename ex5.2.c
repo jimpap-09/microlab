@@ -140,7 +140,7 @@ int main(void) {
 	// Set PCA9555 Port 0 as output
 	PCA9555_0_write(REG_CONFIGURATION_0, 0x00);
 	// PCA9555 Port 1 (high byte) as input and (low byte) as output
-	PCA9555_0_write(REG_CONFIGURATION_1, 0xf0);
+	PCA9555_0_write(REG_CONFIGURATION_1, 0xfe);
 	// init Port 1 (low byte) to 0
 	// default button_value = 1 => button = 0 (while pressed)
 	PCA9555_0_write(REG_OUTPUT_1, 0x00);
