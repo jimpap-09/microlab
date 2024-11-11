@@ -162,7 +162,6 @@ uint8_t f0(uint8_t input) {
 	// F0 = (A'BC + B'D)'
 	uint8_t A_ = A^0x01;
 	uint8_t B_ = B^0x01;
-	uint8_t D_ = D^0x01;
 	uint8_t term1 = A_ & B & C;
 	uint8_t term2 = B_ & D;
 	uint8_t F0 = (term1 | term2)^0x01;
