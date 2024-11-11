@@ -50,7 +50,7 @@ typedef enum {
 uint8_t IO0 = 0x00;
 
 void twi_init(void) {
-	TWSR0 = 0;					// prescaler_value = 1
+	TWSR0 = 0;			// prescaler_value = 1
 	TWBR0 = TWBR0_VALUE;		// scl_clock 100KHz
 }
 
@@ -106,6 +106,7 @@ void twi_start_wait(unsigned char address) {
 	}
 }
 
+// sed data to pipeline
 unsigned char twi_write(unsigned char data) {
 	TWDR0 = data;
 	TWCR0 = (1 << TWINT) | (1 << TWEN);
@@ -115,8 +116,8 @@ unsigned char twi_write(unsigned char data) {
 }
 
 // Send repeated start condition, address, transfer direction
-//Return:  0 device accessible
-//1 failed to access device
+// Return:  0 device accessible
+// 1 failed to access device
 unsigned char twi_rep_start(unsigned char address) {
 	return twi_start( address );
 }
@@ -129,6 +130,7 @@ void twi_stop(void) {
 	while(TWCR0 & (1<<TWSTO));
 }
 
+// store value to reg
 void PCA9555_0_write(PCA9555_REGISTERS reg, uint8_t value) {
 	twi_start_wait(PCA9555_0_ADDRESS + TWI_WRITE);
 	twi_write(reg);
@@ -136,6 +138,7 @@ void PCA9555_0_write(PCA9555_REGISTERS reg, uint8_t value) {
 	twi_stop();
 }
 
+// load content of reg
 uint8_t PCA9555_0_read(PCA9555_REGISTERS reg) {
 	uint8_t ret_val;
 	twi_start_wait(PCA9555_0_ADDRESS + TWI_WRITE);
@@ -216,19 +219,26 @@ int main(void) {
 	// Set PCA9555 Port 0 as output
 	PCA9555_0_write(REG_CONFIGURATION_0, 0x00);
 
+	// init names to display
 	const char name1[] = "Dimitris Papadimitriou";
 	const char name2[] = "Panos Tsarouhas";
 
 	while(1) {
+		// lcd clear
 		lcd_clear_display();
 		_delay_ms(500);
+		// display 1st name (max 16 chars of first line)
 		int i = 0;
 		while(name1[i]) lcd_data(name1[i++]);
 		_delay_ms(500);
+		// new line
 		lcd_command(0xc0);
+		// display 2nd name (max 16 chars of second line)
 		i = 0;
 		while(name2[i]) lcd_data(name2[i++]);
 		_delay_ms(500);
+		// for the 6 remaining letters of the first name
+		// shift right display 6 times
 		for(int i = 0; i < 6; i++) {
 			lcd_command(0x18);
 			_delay_ms(500);
