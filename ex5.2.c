@@ -116,6 +116,8 @@ void twi_stop(void) {
 	// wait until stop condition is executed and bus released
 	while(TWCR0 & (1<<TWSTO));
 }
+
+// store value to reg
 void PCA9555_0_write(PCA9555_REGISTERS reg, uint8_t value) {
 	twi_start_wait(PCA9555_0_ADDRESS + TWI_WRITE);
 	twi_write(reg);
@@ -123,6 +125,7 @@ void PCA9555_0_write(PCA9555_REGISTERS reg, uint8_t value) {
 	twi_stop();
 }
 
+// load the content of reg
 uint8_t PCA9555_0_read(PCA9555_REGISTERS reg) {
 	uint8_t ret_val;
 	twi_start_wait(PCA9555_0_ADDRESS + TWI_WRITE);
