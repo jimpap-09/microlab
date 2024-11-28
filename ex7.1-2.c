@@ -361,12 +361,18 @@ int main() {
 	// Set PCA9555 Port 0 as output
 	PCA9555_0_write(REG_CONFIGURATION_0, 0x00);
 
+	// Read the temperature
 	uint16_t temp = read_temp();
+	// Display it
 	display_temp(temp, msg);
 
+	// infinite loop
 	while(1) {
+		// read the temperature
 		temp = read_temp();
+		// if it remains the same dont change the lcd
 		if(temp == prev_temp) return_home();
+		// else display new temperature
 		else {
 			display_temp(temp, msg);
 			_delay_ms(750);
