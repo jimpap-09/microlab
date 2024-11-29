@@ -244,8 +244,7 @@ void one_wire_transmit_bit(uint8_t out_bit) {
 	DDRD |= (1<<PD4);
 	PORTD &= ~(1<<PD4);
 	_delay_us(2);
-	if(out_bit & 0x01) PORTD |= (1<<PD4);
-	else PORTD &= ~(1<<PD4);
+	PORTD |= (out_bit<<PD4);
 	_delay_us(58);
 	DDRD &= ~(1<<PD4);
 	PORTD &= ~(1<<PD4);
@@ -277,25 +276,22 @@ void one_wire_transmit_byte(uint8_t out_byte) {
 
 // read temperature
 uint16_t read_temp() {
-	uint16_t temp;
-	uint8_t lsb = 0x00, msb = 0x80;		// default temp
+	uint16_t temp 0x8000;
 
 	if(one_wire_reset()) {
 		one_wire_transmit_byte(0xcc);
-		one_wire_transmit_byte(0x44);
+		one_wire_transmit_byte(0x44);			// start counting the temperature
 		
-		_delay_ms(750);
+		while(!one_wire_receive_bit());
 		
 		if(one_wire_reset()) {
 			one_wire_transmit_byte(0xcc);
-			one_wire_transmit_byte(0xbe);
+			one_wire_transmit_byte(0xbe);		// start reading the 16_bit temperature
 				
-			lsb = one_wire_receive_byte();
-			msb = one_wire_receive_byte();
+			temp = one_wire_receive_byte();
+			temp += (one_wire_receive_byte()<<<8);
 		}
 	}
-
-	temp = (msb << 8) | lsb;
 	return temp;
 }
 
@@ -307,7 +303,7 @@ void display_temp(uint16_t temp, unsigned char msg[]) {
 	if(temp == 0x8000) display_msg(msg);
 	else {
 
-		int dec = temp & 0x000f;
+		int dec = (int)(temp & 0x000f) * 6.25;
 
 		int dec1 = (dec % 100) / 10;
 		int dec2 = dec % 10;
@@ -317,24 +313,23 @@ void display_temp(uint16_t temp, unsigned char msg[]) {
 		int acc1 = (acc % 100) / 10;
 		int acc2 = (acc % 10);
 
-		int sign = temp & 0xf800;
+		int sign = (temp & 0xf800) ? 1 : 0;
 
 		lcd_clear_display();
 		_delay_us(250);
-		if(sign == -1) lcd_data('-');
+		if(sign) lcd_data('-');
 		lcd_data('0' + acc1);
 		lcd_data('0' + acc2);
 		lcd_data('.');
 		lcd_data('0' + dec1);
 		lcd_data('0' + dec2);
-		lcd_data('`');
 		lcd_data('C');
 	}
 
 	return;
 }
 
-// display No device message on the lcd
+// display "No Device" message on the lcd
 void display_msg(unsigned char msg[]) {
 	lcd_clear_display();
 	_delay_us(250);
