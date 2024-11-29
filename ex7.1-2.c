@@ -110,6 +110,7 @@ void twi_start_wait(unsigned char address) {
 	}
 }
 
+// send data
 unsigned char twi_write(unsigned char data) {
 	TWDR0 = data;
 	TWCR0 = (1 << TWINT) | (1 << TWEN);
@@ -133,6 +134,7 @@ void twi_stop(void) {
 	while(TWCR0 & (1<<TWSTO));
 }
 
+// write data to register (reg) using twi
 void PCA9555_0_write(PCA9555_REGISTERS reg, uint8_t value) {
 	twi_start_wait(PCA9555_0_ADDRESS + TWI_WRITE);
 	twi_write(reg);
@@ -140,6 +142,7 @@ void PCA9555_0_write(PCA9555_REGISTERS reg, uint8_t value) {
 	twi_stop();
 }
 
+// read data from register (red) using twi
 uint8_t PCA9555_0_read(PCA9555_REGISTERS reg) {
 	uint8_t ret_val;
 	twi_start_wait(PCA9555_0_ADDRESS + TWI_WRITE);
