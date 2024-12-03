@@ -4,14 +4,10 @@
 #include <util/delay.h>
 #include <xc.h>
 
-#define PD4 4
-
 #define PCA9555_0_ADDRESS 0x40
 #define TWI_READ 1
 #define TWI_WRITE 0
 #define SCL_CLOCK 100000L
-
-uint16_t prev_temp = 0x8000;
 
 // TWBR0_VALUE for prescaler = 1
 #define TWBR0_VALUE ((F_CPU/SCL_CLOCK)-16)/2
@@ -51,6 +47,9 @@ typedef enum {
 #define LCD_DB6 6
 #define LCD_DB7 7
 
+#define PD4 4
+
+uint16_t prev_temp = 0x8000;
 uint8_t IO0 = 0x00;
 
 void twi_init(void) {
@@ -272,14 +271,14 @@ void one_wire_transmit_byte(uint8_t out_byte) {
 	uint8_t out_bit;
 	for(int i=0; i<8; i++) {
 		out_bit = out_byte & 1;
-		out_byte>>1;
+		out_byte>>=1;
 		one_wire_transmit_bit(out_bit);
 	}
 }
 
 // read temperature
 uint16_t read_temp() {
-	uint16_t temp 0x8000;
+	uint16_t temp = 0x8000;
 
 	if(one_wire_reset()) {
 		one_wire_transmit_byte(0xcc);
@@ -290,12 +289,21 @@ uint16_t read_temp() {
 		if(one_wire_reset()) {
 			one_wire_transmit_byte(0xcc);
 			one_wire_transmit_byte(0xbe);		// start reading the 16_bit temperature
-				
+			
 			temp = one_wire_receive_byte();
-			temp += (one_wire_receive_byte()<<<8);
+			temp += (one_wire_receive_byte()<<8);
 		}
 	}
 	return temp;
+}
+
+// display "No Device" message on the lcd
+void display_msg(unsigned char msg[]) {
+	lcd_clear_display();
+	_delay_us(250);
+	lcd_command(0x80);
+	int i=0;
+	while(msg[i]) lcd_data(msg[i++]);
 }
 
 // display temperature function
@@ -328,17 +336,6 @@ void display_temp(uint16_t temp, unsigned char msg[]) {
 		lcd_data('0' + dec2);
 		lcd_data('C');
 	}
-
-	return;
-}
-
-// display "No Device" message on the lcd
-void display_msg(unsigned char msg[]) {
-	lcd_clear_display();
-	_delay_us(250);
-	lcd_command(0x80);
-	int i=0;
-	while(msg[i]) lcd_data(msg[i++]);
 }
 
 // return_home function
