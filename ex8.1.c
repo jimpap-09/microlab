@@ -245,8 +245,8 @@ void usart_init(unsigned int ubrr){
 	UBRR0H=(unsigned char)(ubrr>>8);			// UBRR0H = UBRR0[11:8]
 	UBRR0L=(unsigned char)ubrr;					// UBRR0L = UBRR0[7:0]
 	UCSR0C=(3 << UCSZ00);						// USCR0C = 0b00000110
-												// UMSEL0[1:0] = 00 => Asynchronous mode
-												// UCSZ0[2:0] = 011 => 8-bit character size
+	// UMSEL0[1:0] = 00 => Asynchronous mode
+	// UCSZ0[2:0] = 011 => 8-bit character size
 	return;
 }
 
@@ -296,7 +296,12 @@ int usart_receive_message() {							// receive the esp answer
 	return 0;											// else return 0
 }
 
-void esp_display(char msg[]) {							// display esp answer to lcd
+void esp_ans_display(char msg[], int k) {						// display esp answer to lcd
+	lcd_clear_display();
+	_delay_us(250);
+	lcd_command(0x80);
+	lcd_data(k + '0');
+	lcd_data('.');
 	int i=0;
 	while(msg[i]) lcd_data(msg[i++]);
 }
@@ -321,28 +326,21 @@ int main() {
 		lcd_clear_display();						// then clear lcd
 		usart_transmit_message("ESP:connect\n");	// and connect
 		if(usart_receive_message()) {				// receive and display the answer
-			lcd_data('1');
-			lcd_data('.');
-			esp_display(success);
+			esp_ans_display(success, 1);
 		}
 		
 		else {
-			lcd_data('1');
-			lcd_data('.');
-			esp_display(fail);
+			esp_ans_display(fail, 1);
+
 		}
 		_delay_ms(1000);							// wait 1 sec to see the answer
 		lcd_clear_display();						// clear lcd again
 		usart_transmit_message("ESP:url:http://192.168.1.250:5000/data");	// esp url
 		if(usart_receive_message()) {				// receive and display the answer
-			lcd_data('2');
-			lcd_data('.');
-			esp_display(success);
+			esp_ans_display(success, 2);
 		}
 		else {
-			lcd_data('2');
-			lcd_data('.');
-			esp_display(fail);
+			esp_ans_display(fail, 2);
 		}
 	}
 }
