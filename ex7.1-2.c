@@ -316,8 +316,9 @@ void display_temp(uint16_t temp, unsigned char msg[]) {
 
 		int dec = (int)(temp & 0x000f) * 6.25;
 
-		int dec1 = (dec % 100) / 10;
-		int dec2 = dec % 10;
+		int dec1 = (dec % 1000) / 100;
+		int dec2 = (dec % 100) / 10;
+		int dec3 = dec % 10;
 
 		int acc = (temp & 0x07f0) >> 4;
 
@@ -334,6 +335,7 @@ void display_temp(uint16_t temp, unsigned char msg[]) {
 		lcd_data('.');
 		lcd_data('0' + dec1);
 		lcd_data('0' + dec2);
+		lcd_data('0' + dec3);
 		lcd_data('C');
 	}
 }
