@@ -314,7 +314,7 @@ void display_temp(uint16_t temp, unsigned char msg[]) {
 	if(temp == 0x8000) display_msg(msg);
 	else {
 
-		int dec = (int)(temp & 0x000f) * 6.25;
+		int dec = (int)(temp & 0x000f) * 62.5;
 
 		int dec1 = (dec % 1000) / 100;
 		int dec2 = (dec % 100) / 10;
