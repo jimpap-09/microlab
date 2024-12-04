@@ -53,7 +53,7 @@ uint16_t prev_temp = 0x8000;
 uint8_t IO0 = 0x00;
 
 void twi_init(void) {
-	TWSR0 = 0;					// prescaler_value = 1
+	TWSR0 = 0;			// prescaler_value = 1
 	TWBR0 = TWBR0_VALUE;		// scl_clock 100KHz
 }
 
