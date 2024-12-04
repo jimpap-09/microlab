@@ -261,8 +261,8 @@ data: the byte to be transmitted
 return value: None. */
 
 void usart_transmit(uint8_t data) {
-	while(!(UCSR0A & (1<<UDRE0)));			// wait until UDR0 is ready to receive data
-	UDR0 = data;							// then transmit the data
+	while(!(UCSR0A & (1<<UDRE0)));						// wait until UDR0 is ready to receive data
+	UDR0 = data;										// then transmit the data
 }
 
 // function to receive data using usart
@@ -296,7 +296,7 @@ int usart_receive_message() {							// receive the esp answer
 	return 0;											// else return 0
 }
 
-void esp_ans_display(char msg[], int k) {						// display esp answer to lcd
+void esp_ans_display(char msg[], int k) {				// display esp answer to lcd
 	lcd_clear_display();
 	_delay_us(250);
 	lcd_command(0x80);
@@ -328,15 +328,13 @@ int main() {
 		if(usart_receive_message()) {				// receive and display the answer
 			esp_ans_display(success, 1);
 		}
-		
 		else {
 			esp_ans_display(fail, 1);
-
 		}
-		_delay_ms(1000);							// wait 1 sec to see the answer
-		lcd_clear_display();						// clear lcd again
+		_delay_ms(1000);													// wait 1 sec to see the answer
+		lcd_clear_display();												// clear lcd again
 		usart_transmit_message("ESP:url:http://192.168.1.250:5000/data");	// esp url
-		if(usart_receive_message()) {				// receive and display the answer
+		if(usart_receive_message()) {										// receive and display the answer
 			esp_ans_display(success, 2);
 		}
 		else {
