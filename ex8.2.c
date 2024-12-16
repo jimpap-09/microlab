@@ -684,7 +684,8 @@ int main() {
 		key = keypad_to_ascii(pressed_keys);							// key = pressed button
 			
 		if(key == '6') {												// if '6' is pressed
-			strcpy(status, nurse_call);									// then status = NURSE CALL
+			strcpy(status, nurse_call);									// then status = NURSE CAL
+			lcd_display_new_line(empty);								// clear second line
 			lcd_display_new_line(status);								// display status in second line
 		}
 		if(key == '#' && !strcmp(status, nurse_call)) {					// if '#' is pressed while status = NURSE CALL
