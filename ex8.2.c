@@ -3,6 +3,7 @@
 #include <avr/io.h>
 #include <util/delay.h>
 #include <string.h>
+#include <stdio.h>
 #include <xc.h>
 
 #define PCA9555_0_ADDRESS 0x40
@@ -50,6 +51,7 @@ typedef enum {
 
 // ADC input
 #define PC0 0
+#define ADC_CHANNEL 0
 
 // TWI 1 bit wire
 #define PD4 4
@@ -252,10 +254,30 @@ void return_home() {
 }
 
 // display new line
-void lcd_display_new_line(unsigned char msg[]) {
+void lcd_display_new_line(const unsigned char msg[]) {
 	lcd_command(0xc0);
 	int i=0;
 	while(msg[i]) lcd_data(msg[i++]);
+}
+
+// display esp answer to lcd
+void esp_ans_display(char msg[], int k) {
+	lcd_clear_display();
+	_delay_us(250);
+	lcd_command(0x80);
+	lcd_data(k + '0');
+	lcd_data('.');
+	int i=0;
+	while(msg[i]) lcd_data(msg[i++]);
+}
+
+// nice way to display delay on the lcd
+void load() {
+	lcd_command(0xc0);			// new line
+	for(int i=0; i<16; i++) {	// print '#' next to each other 16 times
+		lcd_data('.');
+		_delay_ms(250);		// with total delay of 1 second
+	}
 }
 
 //-----------------------------------------------------------------------------------------------
@@ -326,34 +348,19 @@ void usart_transmit_message(const char* msg) {
 	while(msg[i]) usart_transmit((uint8_t)msg[i++]);	// send each byte to usart
 }
 
-int usart_receive_message() {							// receive the esp answer
-	char ans[20];
-	int i = 0;
-	while(usart_receive() != '"');
-	while(1) {
-		ans[i] = usart_receive();						// receive each byte from usart
-		if(ans[i] == '\n') break;
-		i++;
-	}
-	if(ans[0]=='S') return 1;							// if the answer is Success return 1
-	return 0;											// else return 0
-}
-
-void esp_ans_display(char msg[], int k) {				// display esp answer to lcd
-	lcd_clear_display();
-	_delay_us(250);
-	lcd_command(0x80);
-	lcd_data(k + '0');
-	lcd_data('.');
+void usart_receive_message(char* msg) {
 	int i=0;
-	while(msg[i]) lcd_data(msg[i++]);
+	char received_byte;
+	while((received_byte = usart_receive()) != '\n')
+		msg[i++] = received_byte;
+	msg[i] = '\0';
 }
 
 //-----------------------------------------------------------------------------------------------------------
 
 //------------------------------------------------- TEMPERATURE ---------------------------------------------
 
-uint16_t prev_temp = 0x8000;
+// no device message
 char no_device[] = "No Device";
 
 // return 1 if a device is detected (PD4 = 0), else return 0
@@ -444,7 +451,6 @@ uint16_t read_temp() {
 
 double calc_display_temp(uint16_t temp) {
 
-	prev_temp = temp;
 	double res_temp;
 
 	if(temp == 0x8000) {
@@ -495,17 +501,14 @@ double calc_display_temp(uint16_t temp) {
  ADC enable, prescaler = 128 => fadc = 125kHz
 */
 
-uint16_t prev_adc = 0;
-
 void adc_init() {
 	DDRC &= ~(1<<PC0);
-	ADMUX = (1<<REFS0);
+	ADMUX = (1<<REFS0) | (ADC_CHANNEL);
 	ADCSRA = (1<<ADEN) | (1<<ADPS2) | (1<<ADPS1) | (1<<ADPS0);
 }
 
 double calc_display_adc(uint16_t adc) {
-	prev_adc = adc;
-	uint32_t pressure = prev_adc * 20.0 / 1024.0;
+	uint32_t pressure = adc * 20.0 / 1024.0;
 	
 	int dec1 = pressure / 10;
 	int dec2 = pressure % 10;
@@ -527,12 +530,6 @@ double calc_display_adc(uint16_t adc) {
 //---------------------------------------- KEYBOARD ---------------------------------------------------
 
 uint16_t pressed_keys = NO_KEY_PRESSED;
-
-char ok[] = "OK";
-char nurse_call[] = "NURSE CALL";
-char check_pressure[] = "CHECK PRESSURE";
-char check_temperature[] = "CHECK TEMPERATURE";
-char no_status_found[] = "NO STATUS FOUND";
 
 int scan_row(int row) {
 	PCA9555_0_write(REG_CONFIGURATION_1, ~(1 << row));
@@ -602,8 +599,23 @@ char keypad_to_ascii(uint16_t key_code) {
 	// Invalid key press
 	return '\0';
 }
-
 //-----------------------------------------------------------------------------------------------------
+
+//--------------------------------------------- STATUS ------------------------------------------------
+
+// status messages
+char ok[] = "OK";
+char nurse_call[] = "NURSE CALL";
+char check_pressure[] = "CHECK PRESSURE";
+char check_temperature[] = "CHECK TEMP";
+
+// get status
+void get_status(double p, double t, char* status) {
+	if(p < 4 || p > 12) strcpy(status, check_pressure);
+	else if(t < 34 || t > 37) strcpy(status, check_temperature);
+	else strcpy(status, ok);
+}
+
 int main() {
 	
 	// twi, lcd, usart init
@@ -622,75 +634,77 @@ int main() {
 	// pressure
 	uint16_t pressure;
 	double p;
+	
+	char status[20] = "";
+	char answer[20] = "";
+	char payload[300] = "";
+	char buffer[300] = "";
 
-	// status
-	unsigned char status;
+	char key;
 
-	DDRB = 0xff;
-	usart_transmit_message("ESP:restart\n");		// esp restart
+	strcpy(status, ok);													// init status
 
-	if(usart_receive_message()) {					// if success
-		while(1) {
-/*			lcd_clear_display();						// then clear lcd
+	lcd_clear_display();												// then clear lcd
 
-			usart_transmit_message("ESP:connect\n");	// and connect
-			if(usart_receive_message())					// receive and display the answer
-			esp_ans_display(success, 1);
-			else esp_ans_display(fail, 1);
-			_delay_ms(1000);													// wait 1 sec to see the answer
-			lcd_clear_display();												// clear lcd again
-			usart_transmit_message("ESP:url:http://192.168.1.250:5000/data");	// esp url
-			if(usart_receive_message())											// receive and display the answer
-			esp_ans_display(success, 2);
-			else esp_ans_display(fail, 2);
-			_delay_ms(1000);
-			lcd_clear_display();
-*/
-			return_home();
-			char key;
+	usart_transmit_message("ESP:connect\n");							// connect
+	usart_receive_message(answer);										// receive esp answer
 
-			while(1) {
-				scan_keypad_rising_edge();					// check for pressed buttons
-				key = keypad_to_ascii(pressed_keys);		// key = ascii of pressed button
-				if(key == '6') break;						// if '6' is pressed call nurse
-			}
+	if(!strcmp(answer, success))										// display esp answer
+		esp_ans_display(success, 1);
+	else esp_ans_display(fail, 1);
+	load();																// loading to see esp answer
+
+	lcd_clear_display();												// clear lcd again
+
+	usart_transmit_message("ESP:url:http://192.168.1.250:5000/data");	// esp url
+	usart_receive_message(answer);										// receive esp answer
+
+	if(!strcmp(answer, success))										// display esp answer
+		esp_ans_display(success, 2);
+	else esp_ans_display(fail, 2);
+	load();																// loading to see esp asnwer
+
+	while(1) {
+
+		ADCSRA |= (1<<ADSC);											// start ADC conversion
+		while(ADCSRA & (1 << ADSC));									// while in ADC conversion do nothing
+		pressure = ADC;													// read pressure
+
+		temp = read_temp();												// read temperature
+
+		t = calc_display_temp(temp);									// display temperature
+		lcd_data(' ');
+		p = calc_display_adc(pressure);									// display pressure
+
+		if(strcmp(status, nurse_call)) get_status(p, t, status);		// if status != NURSE CALL then get_status
+		lcd_display_new_line(status);									// display status
+
+		_delay_ms(2000);												// delay 2 sec
+		scan_keypad_rising_edge();										// scan keyboard
+		key = keypad_to_ascii(pressed_keys);							// key = pressed button
 			
-			ADCSRA |= (1<<ADSC);						// start ADC conversion
-			while(ADCSRA & (1 << ADSC));				// while in ADC conversion do nothing
-			pressure = ADC;								// read pressure
-
-			temp = read_temp();							// read temperature
-
-			status = NURSE_CALL;						// status -> nurse call
-			
-			t = calc_display_temp(temp);				// display temperature
-			lcd_data(' ');
-			p = calc_display_adc(pressure);				// display pressure
-
-			lcd_display_new_line(nurse_call);			// display status in new line
-
-			while(1) {
-				scan_keypad_rising_edge();
-				key = keypad_to_ascii(pressed_keys);
-				if(key == '#') break;					// if '#' is pressed update status
-			}
-			
-			lcd_display_new_line(empty);				// clear second lcd line
-			
-			if(p < 4 || p > 12) {
-				status = CHECK_PRESSURE;
-				lcd_display_new_line(check_pressure);
-			}
-			else if(t < 34 || t > 37) {
-				status = CHECK_TEMPERATURE;
-				lcd_display_new_line(check_temperature);
-			}
-			else {
-				status = OK;
-				lcd_display_new_line(ok);
-			}
-			//_delay_ms(2000);
+		if(key == '6') {												// if '6' is pressed
+			strcpy(status, nurse_call);									// then status = NURSE CALL
+			lcd_display_new_line(status);								// display status in second line
 		}
+		if(key == '#' && !strcmp(status, nurse_call)) {					// if '#' is pressed while status = NURSE CALL
+			get_status(p, t, status);									// then get status
+			lcd_display_new_line(empty);								// clear second line
+			lcd_display_new_line(status);								// display updated status in second line
+		}
+		//_delay_ms(1000);												// delay 1 sec
+
+		strcpy(payload, "");											// clear payload
+		strcat(payload, "ESP:payload:["									// payload without status
+		"{\"name\":\"team\", \"value\":\"%d\"}, "
+		"{\"name\":\"temperature\", \"value\":\"%.3f\"}, "
+		"{\"name\":\"pressure\", \"value\":\"%.f\"}, "
+		"{\"name\":\"status\", \"value\":");
+
+		strcat(payload, status);										// payload with status
+		strcat(payload, "}]\n");										// payload completed
+
+		sprintf(buffer, payload, TEAM_ID, t, p);						// store payload to the buffer
 	}
 	return 0;
 }
