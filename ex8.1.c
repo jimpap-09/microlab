@@ -3,6 +3,7 @@
 #include <avr/io.h>
 #include <util/delay.h>
 #include <string.h>
+#include <stdio.h>
 #include <xc.h>
 
 #define PCA9555_0_ADDRESS 0x40
@@ -48,10 +49,28 @@ typedef enum {
 #define LCD_DB6 6
 #define LCD_DB7 7
 
-#define TIMEOUT_20_sec 100
+// ADC input
+#define PC0 0
+#define ADC_CHANNEL 0
 
+// TWI 1 bit wire
+#define PD4 4
+
+// Keyboard
+#define NO_KEY_PRESSED 0xffff
+
+// payload
+#define TEAM_ID 36
+
+// IoT
+#define OK 0
+#define NURSE_CALL 1
+#define CHECK_PRESSURE 2
+#define CHECK_TEMPERATURE 3
+#define TEAM 6
+
+//--------------------------------------- TWI ------------------------------------------
 uint8_t IO0 = 0x00;
-uint16_t prev_temp = 0x8000;
 
 void twi_init(void) {
 	TWSR0 = 0;					// prescaler_value = 1
@@ -152,6 +171,9 @@ uint8_t PCA9555_0_read(PCA9555_REGISTERS reg) {
 	twi_stop();
 	return ret_val;
 }
+//----------------------------------------------------------------------------------------------------
+
+//----------------------------------------------------- LCD ------------------------------------------
 
 // enable pulse
 void enable_pulse() {
@@ -223,6 +245,47 @@ void lcd_display_msg(unsigned char msg[]) {
 	while(msg[i]) lcd_data(msg[i++]);
 }
 
+// return_home function
+void return_home() {
+	lcd_command(0x02);
+	_delay_us(1530);
+}
+
+// display new line
+void lcd_display_new_line(const unsigned char msg[]) {
+	lcd_command(0xc0);
+	int i=0;
+	while(msg[i]) lcd_data(msg[i++]);
+}
+
+// display esp answer to lcd
+void esp_ans_display(char msg[], int k) {
+	lcd_clear_display();
+	_delay_us(250);
+	lcd_command(0x80);
+	lcd_data(k + '0');
+	lcd_data('.');
+	int i=0;
+	while(msg[i]) lcd_data(msg[i++]);
+}
+
+// nice way to display delay on the lcd
+void load() {
+	lcd_command(0xc0);			// new line
+	for(int i=0; i<16; i++) {	// print '#' next to each other 16 times
+		lcd_data('.');
+		_delay_ms(250);		// with total delay of 1 second
+	}
+}
+
+//-----------------------------------------------------------------------------------------------
+
+//----------------------------------------- USART_ESP ------------------------------------------
+
+// esp answer
+char success[] = "Success";
+char fail[] = "Fail";
+
 /* Routine: usart_init
 Description:
 This routine initializes the
@@ -241,7 +304,7 @@ return value: None.
 
 void usart_init(unsigned int ubrr){
 	UCSR0A=0;									// (RXC0, TXC0, UDRE0) = (0, 0, 0) => no state
-	UCSR0B=(1<<RXEN0)|(1<<TXEN0);				// Transmitter on, Reciever on
+	UCSR0B=(1<<RXEN0)|(1<<TXEN0);				// Transmitter on, Receiver on
 	UBRR0H=(unsigned char)(ubrr>>8);			// UBRR0H = UBRR0[11:8]
 	UBRR0L=(unsigned char)ubrr;					// UBRR0L = UBRR0[7:0]
 	UCSR0C=(3 << UCSZ00);						// USCR0C = 0b00000110
@@ -261,8 +324,8 @@ data: the byte to be transmitted
 return value: None. */
 
 void usart_transmit(uint8_t data) {
-	while(!(UCSR0A & (1<<UDRE0)));			// wait until UDR0 is ready to receive data
-	UDR0 = data;							// then transmit the data
+	while(!(UCSR0A & (1<<UDRE0)));						// wait until UDR0 is ready to receive data
+	UDR0 = data;										// then transmit the data
 }
 
 // function to receive data using usart
@@ -283,32 +346,15 @@ void usart_transmit_message(const char* msg) {
 	while(msg[i]) usart_transmit((uint8_t)msg[i++]);	// send each byte to usart
 }
 
-int usart_receive_message() {							// receive the esp answer
-	char ans[20];
-	int i = 0;
-	while(usart_receive() != '"');
-	while(1) {
-		ans[i] = usart_receive();						// receive each byte from usart
-		if(ans[i] == '\n') break;
-		i++;
-	}
-	if(ans[0]=='S') return 1;							// if the answer is Success return 1
-	return 0;											// else return 0
-}
-
-void esp_ans_display(char msg[], int k) {						// display esp answer to lcd
-	lcd_clear_display();
-	_delay_us(250);
-	lcd_command(0x80);
-	lcd_data(k + '0');
-	lcd_data('.');
+void usart_receive_message(char* msg) {
 	int i=0;
-	while(msg[i]) lcd_data(msg[i++]);
+	char received_byte;
+	while((received_byte = usart_receive()) != '\n')
+	msg[i++] = received_byte;
+	msg[i] = '\0';
 }
 
-// esp answer
-char success[] = "Success";
-char fail[] = "Fail";
+//-----------------------------------------------------------------------------------------------------------
 
 int main() {
 	
@@ -320,22 +366,26 @@ int main() {
 	// Set IO0 as output
 	PCA9555_0_write(REG_CONFIGURATION_0, 0x00);
 	
-	usart_transmit_message("ESP:restart\n");		// esp restart
+	char answer[20] = "";
 
-	if(usart_receive_message()) {					// if success
-		while(1) {
-			lcd_clear_display();						// then clear lcd
-			usart_transmit_message("ESP:connect\n");	// and connect
-			if(usart_receive_message())					// receive and display the answer
-			esp_ans_display(success, 1);
-			else esp_ans_display(fail, 1);
-			_delay_ms(1000);							// wait 1 sec to see the answer
-			lcd_clear_display();						// clear lcd again
-			usart_transmit_message("ESP:url:http://192.168.1.250:5000/data");	// esp url
-			if(usart_receive_message())					// receive and display the answer
-			esp_ans_display(success, 2);
-			else esp_ans_display(fail, 2);
-			_delay_ms(1000);
-		}
+	while(1) {
+		usart_transmit_message("ESP:connect\n");							// connect
+		usart_receive_message(answer);										// receive esp answer
+
+		if(!strcmp(answer, success))										// display esp answer
+		esp_ans_display(success, 1);
+		else esp_ans_display(fail, 1);
+		load();																// loading to see esp answer
+
+		lcd_clear_display();												// clear lcd again
+
+		usart_transmit_message("ESP:url:http://192.168.1.250:5000/data");	// esp url
+		usart_receive_message(answer);										// receive esp answer
+
+		if(!strcmp(answer, success))										// display esp answer
+		esp_ans_display(success, 2);
+		else esp_ans_display(fail, 2);
+		load();																// loading to see esp asnwer
 	}
+	return 0;
 }
