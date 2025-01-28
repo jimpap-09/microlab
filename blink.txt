@@ -1,0 +1,43 @@
+; blink led
+
+.def led=r20
+
+.org 0x0000
+
+reset:
+	ldi r16, 0xFF
+	out ddrd, r16
+
+start:
+	ldi led, 0xFF
+	out PORTD, led			; led = ON
+
+	ldi r24, low(1000)
+	ldi r25, high(1000)
+	rcall delay				; delay = 1sec
+
+	ldi led, 0x00
+	out PORTD, led			; led = OFF
+
+	ldi r24, low(1000)
+	ldi r25, high(1000)
+	rcall delay				; delay = 1 sec
+
+    rjmp start				; continue loop
+
+delay:						; delay subroutine
+	ldi r23, 16
+loop_out:
+	ldi r22, 249
+loop_inn:
+	nop
+	dec r22
+	brne loop_inn
+	
+	dec r23
+	brne loop_out
+
+	sbiw r24, 1
+	brne delay
+
+	ret
