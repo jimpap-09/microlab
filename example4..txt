@@ -1,0 +1,195 @@
+.include"m328PBdef.inc"
+
+.def del_high=r25
+.def del_low=r24
+.def freq=r23
+.def cnt=r22
+.def prevADCH=r21
+.def prevADCL=r20
+.def dec2=r19
+.def dec1=r18
+.def temp2=r17
+.def temp=r16
+.def VL=r15
+.def VH=r14
+
+.equ f_CPU = 16					; f = 16 MHz
+.equ LCD_RS = 2
+.equ LCD_E = 3
+.equ LCD_DB4 = 4
+.equ LCD_DB5 = 5
+.equ LCD_DB6 = 6
+.equ LCD_DB7 = 7
+
+.org 0x0
+rjmp reset
+
+reset: 
+    ldi r24, low(RAMEND) 
+    out SPL, r24 
+    ldi r24, high(RAMEND) 
+    out SPH, r24   ; init stack pointer 
+     
+    ser r24 
+    out DDRD, r24  ; set PORTD as output 
+ 
+    rcall lcd_init 
+ 
+    ldi r24, low(100) 
+    ldi r25, high(100)  ; delay 100 mS 
+    rcall wait_msec 
+main: 
+    rcall lcd_clear_display 
+     
+    ldi r24, low(1000) 
+    ldi r25, high(1000) 
+    rcall wait_msec  ; delay 1 Sec 
+     
+    ldi r24, 'A' 
+    call lcd_data  
+ 
+    ldi r24, low(1000) 
+    ldi r25, high(1000) 
+    rcall wait_msec  ; delay 1 Sec 
+    jmp main 
+
+
+
+; write_2_nibbles
+write_2_nibbles:
+	push r24
+	in r25, PIND
+	andi r25, 0x0f
+	andi r24, 0xf0
+	add r24, r25
+	out PORTD, r24
+
+	sbi PORTD, LCD_E
+	nop
+	nop
+	cbi PORTD, LCD_E
+
+	pop r24
+	swap r24
+	andi r24, 0xf0
+	add r24, r25
+	out PORTD, r24
+
+	sbi PORTD, LCD_E
+	nop
+	nop
+	cbi PORTD, LCD_E
+
+	ret
+
+; lcd_init
+lcd_init:
+	ldi del_low ,low(200)
+    ldi del_high ,high(200)
+    rcall wait_msec				; delay 200 msec
+    
+    ldi r24, 0x30				; command to switch to 8 bit mode 
+    out PORTD, r24
+    sbi PORTD, LCD_E			; Enable  Pulse 
+    nop
+    nop
+    cbi PORTD ,LCD_E
+    ldi del_low, 250
+    ldi del_high, 0	 
+    rcall wait_usec				; delay 250 usec
+     
+    ldi r24, 0x30				; command to switch to 8 bit mode 
+    out PORTD, r24
+    sbi PORTD, LCD_E			; Enable  Pulse 
+    nop
+    nop
+    cbi PORTD ,LCD_E
+    ldi del_low, 250
+    ldi del_high, 0	 
+    rcall wait_usec				; delay 250 usec
+
+	ldi r24, 0x30				; command to switch to 8 bit mode 
+    out PORTD, r24
+    sbi PORTD, LCD_E			; Enable  Pulse 
+    nop
+    nop
+    cbi PORTD ,LCD_E
+    ldi del_low, 250
+    ldi del_high, 0	 
+    rcall wait_usec				; delay 250 usec
+
+	ldi r24, 0x20				; command to switch to 4 bit mode 
+    out PORTD, r24
+    sbi PORTD, LCD_E			; Enable  Pulse 
+    nop
+    nop
+    cbi PORTD ,LCD_E
+    ldi del_low, 250
+    ldi del_high, 0	 
+    rcall wait_usec				; deay 250 usec
+
+	ldi r24, 0x28
+	rcall lcd_command			; 5x8 dots, 2 lines
+
+	ldi r24, 0x0c
+	rcall lcd_command			; display on, cursor off
+
+	rcall lcd_clear_display		; clear display
+
+	ldi r24, 0x06
+	rcall lcd_command			; increase address, no display shift
+
+	ret
+
+; lcd_data
+lcd_data:
+	sbi PORTD, LCD_RS			; LCD_RS = 1
+	rcall write_2_nibbles		; send data
+	ldi del_low, 250
+	ldi del_high, 0
+	rcall wait_usec				; delay 250 usec
+	ret
+
+; lcd_command
+lcd_command:
+	cbi PORTD, LCD_RS			; LCD_RS = 0
+	rcall write_2_nibbles		; send command
+	ldi del_low, 250
+	ldi del_high, 0
+	rcall wait_usec				; delay 250 usec
+	ret
+
+; lcd_clear_display
+lcd_clear_display:
+	ldi r24, 0x01
+	rcall lcd_command			; clear dispaly command
+	ldi del_low, low(5)
+	ldi del_high, high(5)
+	rcall wait_msec				; delay 5 msec
+	ret
+
+; wait_msec
+wait_msec:						; 1 ms = f_CPU * 1000 cycles
+    ldi freq, f_CPU
+loop_out:
+    ldi cnt, 249
+loop_inn:
+    dec cnt
+    nop
+    brne loop_inn
+    dec freq
+    brne loop_out
+    sbiw del_low, 1
+    brne wait_msec
+    ret
+
+; wait_usec
+wait_usec:						; 1 us = f_CPU cycles
+    ldi cnt, (f_CPU>>2)
+loop:							; del_loop = 4 * f_CPU/4 cycles
+    nop
+    dec cnt
+    brne loop
+    sbiw del_low, 1
+    brne wait_usec
+    ret
